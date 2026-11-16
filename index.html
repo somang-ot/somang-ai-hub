@@ -815,7 +815,7 @@
       chain = chain.then(function () {
         return slack('auth.test', {}).then(function (d) {
           if (d && d.url) cache.teamUrl = d.url.replace(/\/?$/, '/');
-          if (d && d.user_id) cache.selfId = d.user_id;
+          if (d && d.user_id && !d.bot_id) cache.selfId = d.user_id;
         }).catch(function () {});
       });
     }
@@ -1170,7 +1170,7 @@
     slack('auth.test', {}).then(function (d) {
       auth = d;
       if (d.url) cache.teamUrl = d.url.replace(/\/?$/, '/');
-      if (d.user_id) cache.selfId = d.user_id;
+      if (d.user_id && !d.bot_id) cache.selfId = d.user_id;
       return slack('conversations.info', { channel: state.channel || DEFAULT_CHANNEL });
     }).then(function (info) {
       c.className = 'conn ok';
