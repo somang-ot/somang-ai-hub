@@ -498,7 +498,7 @@
 
   var cache = {
     threads: [], loading: false, error: null, loaded: false,
-    lastSig: '', pending: [], teamUrl: '', userIds: {}, userNames: {}
+    lastSig: '', pending: [], teamUrl: '', selfId: '', userIds: {}, userNames: {}
   };
   var pollTimer = null;
 
@@ -735,7 +735,7 @@
   /* ===================== 데이터 불러오기 ===================== */
   function normalizeThreads(list) {
     return list.map(function (m) {
-      var own = !!(m.own || m.isOwn);
+      var own = !!(m.own || m.isOwn || (cache.selfId && m.user === cache.selfId));
       var aiKey = detectAI(m);
       return {
         ts: m.ts,
@@ -746,7 +746,7 @@
         text: m.text || '',
         body: cleanBody(m.text || ''),
         replies: (m.replies || []).map(function (r) {
-          var rOwn = !!(r.own || r.isOwn);
+          var rOwn = !!(r.own || r.isOwn || (cache.selfId && r.user === cache.selfId));
           var k = detectAI(r);
           return {
             ts: r.ts,
@@ -815,6 +815,7 @@
       chain = chain.then(function () {
         return slack('auth.test', {}).then(function (d) {
           if (d && d.url) cache.teamUrl = d.url.replace(/\/?$/, '/');
+          if (d && d.user_id) cache.selfId = d.user_id;
         }).catch(function () {});
       });
     }
@@ -1072,13 +1073,22 @@
     ta.focus({ preventScroll: true });
   }
 
+  // 글자로 쓴 '@claude' / '@클로드' 는 Slack 이 멘션으로 알아보지 못하므로 <@U…> 로 바꾼다.
+  function mentionize(text) {
+    var id = claudeId();
+    if (!id) return text;
+    return String(text || '').replace(/@(claude|클로드)(?![\w])/gi, '<@' + id + '>');
+  }
+
   function composeText(ai, text) {
-    if (!ai || ai.key === 'all') return text;
-    var already = /(^|\s)@(피클2|피클|뮤즈|클로드|Claude|챗GPT|ChatGPT)\b/i.test(text);
-    if (already) return text;
+    var raw = String(text || '');
+    var already = /(^|\s)@(피클2|피클|뮤즈|클로드|Claude|챗GPT|ChatGPT)(?![\w])/i.test(raw);
+    var out = mentionize(raw);
+    if (!ai || ai.key === 'all') return out;
+    if (already) return out;
     var prefix = ai.prefix;
     if (ai.key === 'claude') prefix = claudeId() ? '<@' + claudeId() + '>' : '@Claude';
-    return prefix + ' ' + text;
+    return prefix + ' ' + out;
   }
 
   function grow() {
@@ -1160,6 +1170,7 @@
     slack('auth.test', {}).then(function (d) {
       auth = d;
       if (d.url) cache.teamUrl = d.url.replace(/\/?$/, '/');
+      if (d.user_id) cache.selfId = d.user_id;
       return slack('conversations.info', { channel: state.channel || DEFAULT_CHANNEL });
     }).then(function (info) {
       c.className = 'conn ok';
