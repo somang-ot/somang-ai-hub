@@ -1,0 +1,1289 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#eef1f1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="AI 협업 방">
+<title>소망 님의 AI 협업 방</title>
+<style>
+  :root{
+    --bg:#edf1f0;
+    --surface:#ffffff;
+    --surface-2:#f7f9f8;
+    --ink:#111827;
+    --ink-soft:#3b4550;
+    --muted:#84909a;
+    --line:#e4e9e7;
+    --mint:#dff5ea;
+    --mint-ink:#0f7a53;
+    --primary:#1b2430;
+    --radius:22px;
+    --shadow:0 1px 2px rgba(16,24,40,.04), 0 10px 26px -18px rgba(16,24,40,.35);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; padding:0}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Malgun Gothic","Noto Sans KR",system-ui,sans-serif;
+    font-size:16px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  button,input,textarea{font:inherit; color:inherit}
+  button{cursor:pointer; border:none; background:none}
+  a{color:inherit}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  .app{max-width:600px; margin:0 auto; padding:22px 16px calc(40px + env(safe-area-inset-bottom))}
+
+  /* ---------- hero ---------- */
+  .badge{
+    display:inline-block; padding:7px 13px; border-radius:999px;
+    background:var(--mint); color:var(--mint-ink);
+    font-size:12.5px; font-weight:800; letter-spacing:-.01em;
+  }
+  h1{
+    margin:14px 0 0;
+    font-size:clamp(30px, 8.6vw, 40px);
+    line-height:1.16;
+    font-weight:800;
+    letter-spacing:-.035em;
+  }
+  .hero-foot{display:flex; align-items:center; gap:12px; margin-top:18px; flex-wrap:wrap}
+  .faces{display:flex; align-items:center}
+  .face{
+    width:38px; height:38px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:13px; font-weight:800; letter-spacing:-.02em;
+    border:3px solid var(--bg);
+    margin-left:-10px;
+    box-shadow:0 1px 2px rgba(16,24,40,.08);
+  }
+  .face:first-child{margin-left:0}
+  .hero-count{font-size:15.5px; font-weight:700; color:#4d5862; letter-spacing:-.01em}
+
+  /* ---------- tabs ---------- */
+  .tabs{
+    display:grid; grid-template-columns:repeat(3,1fr); gap:2px;
+    background:#e1e7e5; border-radius:999px; padding:5px;
+    margin:22px 0 18px;
+    position:sticky; top:8px; z-index:20;
+    backdrop-filter:saturate(140%) blur(8px);
+  }
+  .tab{
+    padding:12px 6px; border-radius:999px;
+    font-size:15px; font-weight:700; color:#7b858e; letter-spacing:-.01em;
+    transition:background .18s, color .18s, box-shadow .18s;
+  }
+  .tab[aria-selected="true"]{
+    background:var(--surface); color:var(--ink);
+    box-shadow:0 1px 3px rgba(16,24,40,.12);
+  }
+
+  /* ---------- panels ---------- */
+  .panel{animation:fade .22s ease}
+  @keyframes fade{from{opacity:0; transform:translateY(4px)} to{opacity:1; transform:none}}
+  [hidden]{display:none !important}
+
+  /* ---------- compose ---------- */
+  .compose{
+    background:#e9eeec;
+    border-radius:26px;
+    padding:20px 18px 16px;
+  }
+  .compose-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px}
+  .compose-head h2{margin:0; font-size:18.5px; font-weight:800; letter-spacing:-.02em}
+  .compose-head span{font-size:12.5px; font-weight:600; color:#7d8891; white-space:nowrap}
+
+  .pills{
+    display:flex; gap:8px; overflow-x:auto; scrollbar-width:none;
+    margin:14px -18px 0; padding:2px 18px 4px;
+    -webkit-overflow-scrolling:touch;
+  }
+  .pills::-webkit-scrollbar{display:none}
+  .pill{
+    flex:0 0 auto; display:inline-flex; align-items:center; gap:7px;
+    padding:9px 14px 9px 10px; border-radius:999px;
+    background:#fff; border:1.5px solid #e7ecea;
+    font-size:14px; font-weight:700; color:#3b4550; letter-spacing:-.01em;
+    transition:border-color .16s, background .16s, color .16s, transform .1s;
+  }
+  .pill:active{transform:scale(.97)}
+  .pill .dot-av{
+    width:22px; height:22px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:10.5px; font-weight:800;
+  }
+  .pill[aria-checked="true"]{
+    background:#f3fbf7; border-color:#8ed9bb; color:#0b6b47;
+  }
+
+  .compose textarea{
+    display:block; width:100%; margin-top:12px;
+    min-height:92px; max-height:220px;
+    padding:15px 15px;
+    background:#fff; border:0; border-radius:16px;
+    font-size:15.5px; line-height:1.55; letter-spacing:-.01em;
+    resize:none; outline:none;
+    box-shadow:inset 0 0 0 1px rgba(16,24,40,.02);
+    transition:box-shadow .16s;
+  }
+  .compose textarea:focus{box-shadow:inset 0 0 0 2px #b9e6d3}
+  .compose textarea::placeholder{color:#9aa4ac}
+
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    border-radius:14px; font-weight:700; letter-spacing:-.01em;
+    transition:transform .1s, opacity .16s, background .16s;
+  }
+  .btn:active{transform:scale(.99)}
+  .btn[disabled]{opacity:.55; cursor:default}
+  .btn.primary{background:var(--primary); color:#fff}
+  .btn.ghost{background:#eff2f1; color:#3b4550}
+  .send{width:100%; height:54px; margin-top:12px; font-size:16.5px}
+  .compose .helper{
+    margin:11px 2px 0; font-size:12.5px; line-height:1.62; color:#78838c; letter-spacing:-.01em;
+  }
+  .mode-note{
+    margin-top:12px; padding:10px 12px; border-radius:12px;
+    background:#fff6e5; color:#8a6100; font-size:12.5px; font-weight:600; line-height:1.5;
+  }
+
+  /* ---------- feed head ---------- */
+  .feed-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin:26px 2px 12px; gap:10px;
+  }
+  .feed-title{display:flex; align-items:center; gap:8px; font-size:17px; font-weight:800; letter-spacing:-.02em}
+  .count{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:26px; height:24px; padding:0 8px;
+    background:#e6ebe9; border-radius:999px;
+    font-size:12.5px; font-weight:800; color:#5b6670;
+  }
+  .feed-tools{display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:#6f7a83}
+  .status-dot{width:7px; height:7px; border-radius:50%; background:#22c55e; display:inline-block}
+  .status-dot.off{background:#c2c9cf}
+  .icon-btn{
+    width:32px; height:32px; border-radius:10px; background:#e6ebe9; color:#4c5761;
+    display:inline-flex; align-items:center; justify-content:center; font-size:15px;
+  }
+  .icon-btn:active{background:#dde3e1}
+  .icon-btn.spin{animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .switch.mini{display:inline-flex}
+  .switch.mini i{width:34px; height:20px}
+  .switch.mini i::after{width:16px; height:16px}
+
+  /* ---------- decisions ---------- */
+  .decisions{
+    background:#f4fbf7; border:1px solid #d8eee3; border-radius:18px;
+    padding:14px 16px; margin-bottom:12px;
+  }
+  .decisions h3{margin:0 0 8px; font-size:12.5px; font-weight:800; color:#0f7a53; letter-spacing:.02em}
+  .decisions ul{margin:0; padding:0; list-style:none; display:grid; gap:6px}
+  .decisions li{font-size:13.5px; line-height:1.5; color:#33453d; display:flex; gap:7px}
+  .decisions li span{color:#0f7a53; font-weight:800}
+
+  /* ---------- timeline ---------- */
+  .timeline{display:grid; gap:12px}
+  .card{
+    background:var(--surface); border-radius:20px; padding:15px 16px 14px;
+    box-shadow:var(--shadow); border:1px solid rgba(228,233,231,.9);
+  }
+  .card-top{display:flex; align-items:center; gap:10px}
+  .ava{
+    width:32px; height:32px; border-radius:11px; flex:0 0 auto;
+    display:flex; align-items:center; justify-content:center;
+    font-size:12.5px; font-weight:800; letter-spacing:-.03em;
+  }
+  .who{flex:1 1 auto; min-width:0}
+  .who-line{display:flex; align-items:center; gap:6px; min-width:0}
+  .name{font-size:14px; font-weight:800; letter-spacing:-.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .tag{
+    font-size:10.5px; font-weight:800; padding:2px 7px; border-radius:6px;
+    background:#eef1f0; color:#6b757e; white-space:nowrap;
+  }
+  .tag.mine{background:#e8eefc; color:#2b4bb5}
+  .meta{font-size:11.5px; color:#95a0a8; margin-top:1px}
+  .plink{color:#aeb7be; font-size:14px; padding:4px; flex:0 0 auto}
+  .msg{
+    margin:11px 0 0; font-size:15.5px; line-height:1.62; letter-spacing:-.01em;
+    color:#1a2330; white-space:pre-wrap; overflow-wrap:anywhere;
+  }
+  .msg a{color:#0f7a53; text-decoration:underline; text-underline-offset:2px}
+  .msg strong{font-weight:800}
+  .msg code{background:#f1f4f3; border-radius:5px; padding:1px 5px; font-size:13.5px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .msg pre{background:#f5f8f7; border-radius:10px; padding:10px 12px; overflow-x:auto; font-size:13px; line-height:1.5; margin:8px 0 0; font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .msg .mention{color:#2b4bb5; font-weight:700}
+  .msg .quote{display:block; padding-left:10px; border-left:3px solid #dfe5e3; color:#5c6873}
+
+  .replies{margin-top:12px; display:grid; gap:10px}
+  .reply{display:flex; gap:9px; padding-left:11px; border-left:2px solid var(--accent,#dfe5e3)}
+  .reply .ava{width:26px; height:26px; border-radius:9px; font-size:10.5px}
+  .rbody{min-width:0; flex:1}
+  .rline{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
+  .rname{font-size:12.5px; font-weight:800; color:#3b4550; letter-spacing:-.02em}
+  .rtime{font-size:11px; color:#a2acb3}
+  .rmsg{font-size:14.5px; line-height:1.6; color:#2b3540; margin-top:3px; white-space:pre-wrap; overflow-wrap:anywhere}
+  .waiting{font-size:12.5px; color:#95a0a8; margin-top:8px; display:flex; align-items:center; gap:6px}
+  .waiting .dots{display:inline-flex; gap:3px}
+  .waiting .dots i{width:4px; height:4px; border-radius:50%; background:#c6ced4; animation:blink 1.2s infinite}
+  .waiting .dots i:nth-child(2){animation-delay:.2s}
+  .waiting .dots i:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,60%,100%{opacity:.35} 30%{opacity:1}}
+
+  .skeleton{height:88px; border-radius:20px; background:linear-gradient(100deg,#e9edec 20%,#f2f5f4 40%,#e9edec 60%); background-size:200% 100%; animation:sh 1.2s infinite linear}
+  @keyframes sh{to{background-position:-200% 0}}
+
+  .empty{
+    background:var(--surface); border-radius:20px; padding:26px 20px; text-align:center;
+    color:#7d8891; font-size:14px; line-height:1.6; box-shadow:var(--shadow);
+  }
+  .empty b{display:block; color:#3b4550; font-size:15px; margin-bottom:6px}
+
+  /* ---------- members ---------- */
+  .section-title{margin:0; font-size:18px; font-weight:800; letter-spacing:-.02em}
+  .section-sub{margin:6px 0 16px; font-size:13.5px; line-height:1.6; color:#7d8891}
+  .member{
+    display:flex; gap:13px; align-items:flex-start;
+    background:var(--surface); border-radius:20px; padding:16px;
+    box-shadow:var(--shadow); margin-bottom:10px;
+  }
+  .member .ava{width:44px; height:44px; border-radius:14px; font-size:15px}
+  .member-body{flex:1; min-width:0}
+  .member-name{font-size:16px; font-weight:800; letter-spacing:-.02em}
+  .member-role{font-size:12.5px; color:#7d8891; margin-top:1px}
+  .member-meta{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px}
+  .chip{
+    font-size:11.5px; font-weight:700; padding:4px 9px; border-radius:8px;
+    background:#f1f4f3; color:#58636c;
+  }
+  .chip.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:0}
+  .member-how{font-size:13px; color:#5c6873; line-height:1.55; margin-top:9px}
+  .member-cta{
+    margin-top:11px; font-size:12.5px; font-weight:800; color:#0f7a53;
+    display:inline-flex; align-items:center; gap:4px;
+  }
+  .members-note{font-size:12.5px; line-height:1.65; color:#7d8891; padding:4px 4px 0}
+
+  /* ---------- settings ---------- */
+  .settings{background:var(--surface); border-radius:22px; padding:20px 18px; box-shadow:var(--shadow)}
+  .field{display:block; margin-top:16px}
+  .field > span{display:block; font-size:12.5px; font-weight:800; color:#4c5761; margin-bottom:7px; letter-spacing:-.01em}
+  .field input{
+    width:100%; height:48px; padding:0 14px;
+    background:#f7f9f8; border:1.5px solid #e4e9e7; border-radius:13px;
+    font-size:15px; letter-spacing:-.01em; outline:none;
+    transition:border-color .16s, background .16s;
+  }
+  .field input:focus{border-color:#9fdcC4; background:#fff}
+  .hint{margin:7px 2px 0; font-size:11.5px; line-height:1.55; color:#95a0a8}
+  .switch-row{
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    padding:14px 0; border-bottom:1px solid #eef1f0;
+  }
+  .switch-row b{display:block; font-size:14px; font-weight:700; letter-spacing:-.01em}
+  .switch-row small{display:block; font-size:11.5px; color:#95a0a8; margin-top:2px; line-height:1.45}
+  .switch{position:relative; display:inline-flex; flex:0 0 auto}
+  .switch input{position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer}
+  .switch i{
+    width:46px; height:27px; border-radius:999px; background:#dfe4e2; display:block;
+    transition:background .18s; pointer-events:none;
+  }
+  .switch i::after{
+    content:""; position:absolute; top:3px; left:3px;
+    width:21px; height:21px; border-radius:50%; background:#fff;
+    box-shadow:0 1px 3px rgba(16,24,40,.25);
+    transition:transform .18s;
+  }
+  .switch input:checked + i{background:#0f9d68}
+  .switch input:checked + i::after{transform:translateX(19px)}
+  .switch input:focus-visible + i{outline:2px solid #0f9d68; outline-offset:2px}
+
+  .btn-row{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:20px}
+  .btn-row .btn{height:50px; font-size:15px}
+  .conn{
+    margin-top:14px; padding:12px 14px; border-radius:13px; background:#f5f8f7;
+    font-size:12.5px; line-height:1.55; color:#5c6873; word-break:break-word;
+  }
+  .conn.ok{background:#eefaf4; color:#0b6b47}
+  .conn.err{background:#fdefef; color:#a33636}
+  .linkish{
+    margin-top:14px; font-size:12.5px; font-weight:700; color:#95a0a8;
+    text-decoration:underline; text-underline-offset:3px; padding:4px 0;
+  }
+
+  /* ---------- toast ---------- */
+  .toast{
+    position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom));
+    transform:translate(-50%,20px); opacity:0; pointer-events:none;
+    background:#1b2430; color:#fff; font-size:13.5px; font-weight:600;
+    padding:12px 18px; border-radius:999px; max-width:88vw; text-align:center;
+    box-shadow:0 12px 30px -12px rgba(16,24,40,.6);
+    transition:opacity .2s, transform .2s; z-index:50;
+  }
+  .toast.show{opacity:1; transform:translate(-50%,0)}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.001ms !important; transition-duration:.001ms !important}
+  }
+  @media (min-width:480px){
+    .app{padding-top:30px}
+    .compose{padding:22px 20px 18px}
+    .pills{margin-left:-20px; margin-right:-20px; padding-left:20px; padding-right:20px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <span class="badge">소망 님의 AI 협업 방</span>
+    <h1>AI들이<br>일을 이어 가고 있어요</h1>
+    <div class="hero-foot">
+      <div class="faces" id="faces" aria-hidden="true"></div>
+      <div class="hero-count" id="heroCount">AI 5개가 함께해요</div>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="화면 선택">
+    <button class="tab" role="tab" id="tab-chat" aria-selected="true" aria-controls="panel-chat" data-tab="chat">대화·결정</button>
+    <button class="tab" role="tab" id="tab-members" aria-selected="false" aria-controls="panel-members" data-tab="members">멤버·AI</button>
+    <button class="tab" role="tab" id="tab-settings" aria-selected="false" aria-controls="panel-settings" data-tab="settings">설정</button>
+  </nav>
+
+  <main>
+    <!-- ================= 대화·결정 ================= -->
+    <section class="panel" id="panel-chat" role="tabpanel" aria-labelledby="tab-chat">
+      <div class="compose">
+        <div class="compose-head">
+          <h2>AI에게 시킬 일</h2>
+          <span>답장은 자동으로 와요</span>
+        </div>
+
+        <div class="pills" id="pills" role="radiogroup" aria-label="누구에게 시킬지 고르기"></div>
+
+        <textarea id="input" rows="3" placeholder="예: 이번 주 육아용품 쿠팡 반품 특가 정리해줘" aria-label="AI에게 시킬 일"></textarea>
+
+        <button class="btn primary send" id="send">지시 남기기</button>
+
+        <p class="helper">고른 AI가 먼저 답하고, 필요하면 다른 AI가 이어받아요. 이름을 콕 부르고 싶으면 @피클처럼 적어도 돼요.</p>
+        <div class="mode-note" id="modeNote" hidden></div>
+      </div>
+
+      <div class="feed-head">
+        <div class="feed-title">대화 <span class="count" id="count">0</span></div>
+        <div class="feed-tools">
+          <span id="feedStatus"><span class="status-dot" id="statusDot"></span> <span id="statusText">5종 AI 자동 응답</span></span>
+          <button class="icon-btn" id="refresh" aria-label="새로고침" title="새로고침">↻</button>
+          <label class="switch mini" title="20초마다 새 답장 확인">
+            <input type="checkbox" id="poll" aria-label="자동 새로고침">
+            <i></i>
+          </label>
+        </div>
+      </div>
+
+      <div class="decisions" id="decisions" hidden></div>
+      <div class="timeline" id="timeline"></div>
+    </section>
+
+    <!-- ================= 멤버·AI ================= -->
+    <section class="panel" id="panel-members" role="tabpanel" aria-labelledby="tab-members" hidden>
+      <h2 class="section-title">함께하는 AI</h2>
+      <p class="section-sub">이름을 부르면 그 AI가 스레드로 답해요. 아래에서 고르면 바로 지시할 수 있어요.</p>
+      <div id="members"></div>
+      <p class="members-note">‘모두에게’는 멘션 없이 방 전체에 남겨요. 방을 지켜보는 AI들이 알아서 답하고, 스레드에 [피클]·[뮤즈]처럼 이름표를 달아 이어 말해요.</p>
+    </section>
+
+    <!-- ================= 설정 ================= -->
+    <section class="panel" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+      <div class="settings">
+        <h2 class="section-title">Slack 연결</h2>
+        <p class="section-sub">한 번만 넣어 두면 폰에서 바로 지시하고 답장을 볼 수 있어요. 값은 이 브라우저에만 저장돼요.</p>
+
+        <label class="field">
+          <span>Slack 토큰 (Bot 또는 User)</span>
+          <input id="in-token" type="password" placeholder="xoxb-… 또는 xoxp-…" autocomplete="off" spellcheck="false" autocapitalize="off">
+        </label>
+        <p class="hint">필요한 권한: channels:history, channels:read, chat:write, users:read</p>
+
+        <label class="field">
+          <span>채널 ID</span>
+          <input id="in-channel" type="text" placeholder="C0CHQCP2KPD" autocomplete="off" spellcheck="false" autocapitalize="off">
+        </label>
+
+        <label class="field">
+          <span>프록시 URL (Cloudflare Worker)</span>
+          <input id="in-proxy" type="url" placeholder="https://somang-ai-hub.내이름.workers.dev" autocomplete="off" spellcheck="false" autocapitalize="off">
+        </label>
+        <p class="hint">휴대폰 브라우저에서 slack.com을 직접 부르면 CORS에 막혀요. Worker 프록시를 거치면 폰에서도 안전하게 동작해요.</p>
+
+        <div class="switch-row">
+          <div><b>Worker에 토큰 보관</b><small>프록시가 토큰을 갖고 있으면 폰에는 토큰을 저장하지 않아도 돼요.</small></div>
+          <label class="switch"><input type="checkbox" id="sw-worker" aria-label="Worker에 토큰 보관"><i></i></label>
+        </div>
+        <div class="switch-row">
+          <div><b>미리보기(데모) 모드</b><small>연결 전에도 화면을 그대로 써볼 수 있어요.</small></div>
+          <label class="switch"><input type="checkbox" id="sw-demo" aria-label="미리보기 모드"><i></i></label>
+        </div>
+        <div class="switch-row" style="border-bottom:none">
+          <div><b>자동 새로고침</b><small>20초마다 새 답장을 확인해요.</small></div>
+          <label class="switch"><input type="checkbox" id="sw-poll" aria-label="자동 새로고침"><i></i></label>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn ghost" id="btn-test">연결 테스트</button>
+          <button class="btn primary" id="btn-save">저장</button>
+        </div>
+        <div class="conn" id="conn">아직 연결하지 않았어요. 미리보기로 화면을 먼저 볼 수 있어요.</div>
+        <button class="linkish" id="btn-clear">토큰 지우기</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ===================== 기본값 ===================== */
+  var STORE = 'somang-ai-hub:v1';
+  var DEFAULT_CHANNEL = 'C0CHQCP2KPD';
+
+  var AIS = [
+    { key:'all', name:'모두에게', av:'📣', prefix:null, bg:'#e9eef1', fg:'#334155',
+      role:'방 전체에게 한 번에', mention:'멘션 없이', how:'방을 지켜보는 AI들이 모두 같은 메시지를 봐요. 답하는 AI가 스레드에 이름표를 달아요.' },
+    { key:'pickle', name:'피클', av:'피', prefix:'@피클', bg:'#d9f2e4', fg:'#0b6b45',
+      role:'망이 · 개인 비서', mention:'@피클', how:'지시를 받으면 스레드에 [피클]로 답해요. 앱에서 Slack 연결이 켜져 있어야 해요.' },
+    { key:'pickle2', name:'피클2', av:'피2', prefix:'@피클2', bg:'#fdf0c9', fg:'#8a6100',
+      role:'천소망 · 두 번째 피클', mention:'@피클2', how:'스레드에 [피클2]로 답해요. 피클과 역할을 나눠 맡길 때 좋아요.' },
+    { key:'muse', name:'뮤즈', av:'뮤', prefix:'@뮤즈', bg:'#dce9ff', fg:'#1d4ed8',
+      role:'Meta Muse · 정리와 요약', mention:'@뮤즈', how:'10분 안에 스레드에 [뮤즈]로 답해요. 긴 대화를 정리할 때 든든해요.' },
+    { key:'claude', name:'클로드', av:'클', prefix:'@Claude', bg:'#ffe4cf', fg:'#a34a00',
+      role:'Claude · 바로 답하는 AI', mention:'@Claude', how:'부르면 즉시 스레드에 답해요. 초안·비교·정리가 빠른 편이에요.' },
+    { key:'chatgpt', name:'챗GPT', av:'G', prefix:'@챗GPT', bg:'#ece3ff', fg:'#5b21b6',
+      role:'ChatGPT · 아이디어와 초안', mention:'@챗GPT', how:'스레드에 [챗GPT]로 답해요. 다른 각도의 의견을 들을 때 좋아요.' }
+  ];
+  var REPLY_AIS = AIS.filter(function (a) { return a.key !== 'all'; });
+
+  var ERRORS = {
+    invalid_auth: '토큰이 올바르지 않아요. 설정에서 토큰을 다시 확인해 주세요.',
+    not_authed: '토큰이 비어 있어요. 설정에서 토큰을 넣어 주세요.',
+    account_inactive: '이 토큰의 계정이 비활성 상태예요.',
+    missing_scope: '권한(scope)이 부족해요. Slack 앱에 channels:history, chat:write 같은 권한을 추가하고 다시 설치해 주세요.',
+    not_in_channel: '봇이 이 채널에 없어요. Slack 채널에서 /invite 로 봇을 초대해 주세요.',
+    channel_not_found: '채널을 찾을 수 없어요. 설정에서 채널 ID를 확인해 주세요.',
+    is_archived: '보관된 채널이에요. 다른 채널을 골라 주세요.',
+    ratelimited: '요청이 잠깐 많았어요. 조금 뒤에 다시 시도할게요.',
+    msg_too_long: '메시지가 너무 길어요. 조금 줄여 주세요.'
+  };
+
+  var state = {
+    token: '', channel: DEFAULT_CHANNEL, proxy: '',
+    workerToken: false, demo: false, poll: true,
+    target: 'all'
+  };
+
+  var cache = {
+    threads: [], loading: false, error: null, loaded: false,
+    lastSig: '', pending: [], teamUrl: '', userIds: {}, userNames: {}
+  };
+  var pollTimer = null;
+
+  /* ===================== 유틸 ===================== */
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function aiByKey(k) {
+    for (var i = 0; i < AIS.length; i++) if (AIS[i].key === k) return AIS[i];
+    return null;
+  }
+  function tsToDate(ts) { return new Date(parseFloat(ts) * 1000); }
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function clock(ts) {
+    var d = tsToDate(ts);
+    if (isNaN(d.getTime())) return '';
+    var h = d.getHours(), m = d.getMinutes();
+    return (h < 12 ? '오전 ' : '오후 ') + (h % 12 === 0 ? 12 : h % 12) + ':' + pad(m);
+  }
+  function dayLabel(ts) {
+    var d = tsToDate(ts), now = new Date();
+    var same = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+    if (same) return '오늘';
+    var y = new Date(now.getTime() - 86400000);
+    if (d.getFullYear() === y.getFullYear() && d.getMonth() === y.getMonth() && d.getDate() === y.getDate()) return '어제';
+    if (d.getFullYear() === now.getFullYear()) return (d.getMonth() + 1) + '월 ' + d.getDate() + '일';
+    return d.getFullYear() + '.' + (d.getMonth() + 1) + '.' + d.getDate();
+  }
+  function when(ts) {
+    if (!ts) return '';
+    var d = tsToDate(ts), now = new Date();
+    var same = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+    return same ? clock(ts) : dayLabel(ts) + ' ' + clock(ts);
+  }
+  function toast(msg, ms) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { t.classList.remove('show'); }, ms || 2600);
+  }
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORE);
+      if (!raw) return;
+      var o = JSON.parse(raw);
+      Object.keys(state).forEach(function (k) { if (o[k] !== undefined) state[k] = o[k]; });
+    } catch (e) {}
+    if (!state.channel) state.channel = DEFAULT_CHANNEL;
+  }
+  function saveState() {
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
+  }
+  function liveCredentials() {
+    return !!(state.token || (state.proxy && state.workerToken));
+  }
+  function mode() {
+    if (state.demo) return 'demo';
+    return liveCredentials() ? 'live' : 'demo';
+  }
+  function claudeId() { return cache.userIds.claude || ''; }
+
+  /* ===================== Slack 텍스트 → HTML ===================== */
+  var EMOJI = {
+    wave:'👋', pushpin:'📌', bulb:'💡', white_check_mark:'✅', tada:'🎉',
+    memo:'📝', sparkles:'✨', fire:'🔥', eyes:'👀', point_right:'👉', calendar:'📅'
+  };
+  function formatSlack(raw) {
+    var s = esc(raw || '');
+    s = s.replace(/```([\s\S]*?)```/g, function (_, c) { return '<pre>' + c.replace(/^\n/, '') + '</pre>'; });
+    s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+    s = s.replace(/&lt;@([UW][A-Z0-9]+)(?:\|([^&]*?))?&gt;/g, function (_, id, label) {
+      var nm = label || cache.userNames[id] || '멤버';
+      return '<span class="mention">@' + nm + '</span>';
+    });
+    s = s.replace(/&lt;(https?:\/\/[^|&\s]+)\|([^&]*?)&gt;/g, function (_, url, label) {
+      return '<a href="' + url + '" target="_blank" rel="noopener">' + (label || url) + '</a>';
+    });
+    s = s.replace(/&lt;(https?:\/\/[^&\s]+)&gt;/g, function (_, url) {
+      return '<a href="' + url + '" target="_blank" rel="noopener">' + url.replace(/^https?:\/\//, '') + '</a>';
+    });
+    s = s.replace(/:([a-z0-9_+\-]+):/g, function (m, name) { return EMOJI[name] || m; });
+    s = s.replace(/(^|\n)&gt;\s?([^\n]*)/g, function (_, pre, line) { return pre + '<span class="quote">' + line + '</span>'; });
+    s = s.replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>');
+    s = s.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?'"]|$)/g, '$1<em>$2</em>');
+    s = s.replace(/~([^~\n]+)~/g, '<s>$1</s>');
+    return s;
+  }
+
+  function cleanBody(text) {
+    var t = String(text || '');
+    t = t.replace(/^\s*\[(피클2|피클|뮤즈|클로드|Claude|챗GPT|ChatGPT)\]\s*/i, '');
+    t = t.replace(/(\n+\s*)?\*?다음을 사용하여 보냄\*?\s*\S+\s*$/i, '');
+    t = t.replace(/(\n+\s*)?_?Sent using_?\s+\S+\s*$/i, '');
+    return t.trim();
+  }
+
+  function detectAI(msg) {
+    var text = String(msg.text || '');
+    var m = text.match(/^\s*\[(피클2|피클|뮤즈|클로드|Claude|챗GPT|ChatGPT)\]\s*/i);
+    if (m) {
+      var k = m[1].toLowerCase();
+      if (k === '피클2') return 'pickle2';
+      if (k === '피클') return 'pickle';
+      if (k === '뮤즈') return 'muse';
+      if (k === '클로드' || k === 'claude') return 'claude';
+      return 'chatgpt';
+    }
+    var un = String(msg.user_name || cache.userNames[msg.user] || '').toLowerCase();
+    if (un.indexOf('claude') >= 0) return 'claude';
+    if (un.indexOf('chatgpt') >= 0 || un.indexOf('gpt') >= 0) return 'chatgpt';
+    if (un.indexOf('muse') >= 0 || un.indexOf('뮤즈') >= 0) return 'muse';
+    if (un.indexOf('피클') >= 0) return 'pickle';
+    return null;
+  }
+
+  function isNoise(msg) {
+    var st = msg.subtype || '';
+    if (st === 'channel_join' || st === 'channel_leave' || st === 'channel_topic' ||
+        st === 'channel_purpose' || st === 'channel_name' || st === 'group_join' || st === 'group_leave') return true;
+    if (/님이 채널에 (참여|나갔)/.test(msg.text || '')) return true;
+    if (/has (joined|left) the channel/.test(msg.text || '')) return true;
+    return false;
+  }
+
+  /* ===================== API ===================== */
+  function apiUrl(method) {
+    var p = (state.proxy || '').trim();
+    if (!p) return 'https://slack.com/api/' + method;
+    p = p.replace(/\/+$/, '');
+    if (/\/api$/.test(p)) p = p.slice(0, -4);
+    return p + '/' + method;
+  }
+
+  function mapError(code) {
+    return ERRORS[code] || ('Slack 오류: ' + code);
+  }
+
+  function slack(method, params) {
+    if (mode() === 'demo') return demoApi(method, params);
+    var body = Object.assign({}, params || {});
+    if (state.token) body.token = state.token;
+    var headers = { 'Content-Type': 'application/json; charset=utf-8' };
+    if (!state.proxy && state.token) headers.Authorization = 'Bearer ' + state.token;
+    return fetch(apiUrl(method), {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(body)
+    }).catch(function () {
+      throw new Error('Slack에 닿지 못했어요. 프록시 URL과 인터넷 연결을 확인해 주세요. (브라우저에서 slack.com을 직접 부르면 CORS에 막혀요)');
+    }).then(function (res) {
+      return res.json().catch(function () {
+        throw new Error('Slack 응답을 읽지 못했어요. (HTTP ' + res.status + ') 프록시 주소가 맞는지 확인해 주세요.');
+      });
+    }).then(function (data) {
+      if (!data || data.ok !== true) {
+        var code = (data && data.error) || 'unknown_error';
+        var e = new Error(mapError(code));
+        e.code = code;
+        e.detail = data;
+        throw e;
+      }
+      return data;
+    });
+  }
+
+  /* ===================== 데모 데이터 ===================== */
+  function demoApi(method, params) {
+    return new Promise(function (resolve, reject) {
+      setTimeout(function () {
+        if (method === 'auth.test') {
+          resolve({ ok: true, user_id: 'U-DEMO', user: 'somang', team: '소망 AI 협업방', url: 'https://demo.slack.com/' });
+        } else if (method === 'users.list') {
+          resolve({ ok: true, members: [{ id: 'U-DEMO', name: 'cheonsomang', display_name: '소망' }] });
+        } else if (method === 'conversations.info') {
+          resolve({ ok: true, channel: { id: state.channel || DEFAULT_CHANNEL, name: '소망-ai-협업방-전체' } });
+        } else if (method === 'chat.postMessage') {
+          resolve({ ok: true, ts: String(Date.now() / 1000), channel: state.channel });
+        } else if (method === 'conversations.history') {
+          resolve({ ok: true, messages: [] });
+        } else if (method === 'conversations.replies') {
+          resolve({ ok: true, messages: [] });
+        } else {
+          reject(Object.assign(new Error('미리보기에서는 지원하지 않는 기능이에요.'), { code: 'demo_unsupported' }));
+        }
+      }, 120);
+    });
+  }
+
+  function demoThreads() {
+    var now = Date.now() / 1000;
+    function t(min) { return (now - min * 60).toFixed(6); }
+    return [
+      {
+        ts: t(7), userName: '소망', isOwn: true, user: 'U-DEMO',
+        text: '이번 주 육아용품 쿠팡 반품 특가 정리해줘',
+        replies: [
+          { ts: t(5), userName: '피클', text: '[피클] 이번 주 반품 특가 4건 찾았어요.\n• 기저귀 3단계 — 32% 할인, 반품 후 재구매가 유리해요\n• 물티슈 캡형 — 18% 할인\n• 이유식 큐브 — 25% 할인\n• 아기 세제 리필 — 21% 할인\n표로 묶어서 스레드에 남겨 둘게요.' },
+          { ts: t(4), userName: '뮤즈', text: '[뮤즈] 정리 감사해요. 기저귀는 지난주보다 4,000원 내렸고, 물티슈는 다음 주에 더 내려갈 수 있다는 글도 있어요. 급한 것만 이번 주에 사는 걸 추천해요.\n*다음을 사용하여 보냄* Muse' }
+        ]
+      },
+      {
+        ts: t(52), userName: '소망', isOwn: true, user: 'U-DEMO',
+        text: '내일 청주 날씨 알아보고 결과를 남겨 줘',
+        replies: [
+          { ts: t(48), userName: '뮤즈', text: '[뮤즈] 내일 청주는 맑고 낮 18도·아침 7도예요. 바람이 약해서 외출하기 좋아요. 아침엔 가벼운 겉옷이 필요해요.\n*다음을 사용하여 보냄* Muse' }
+        ]
+      },
+      {
+        ts: t(196), userName: '소망', isOwn: true, user: 'U-DEMO',
+        text: '@클립 블로그 포스팅 분석을 다시 해서 또 하나의 블로그를 운영해 보는 게 어때?',
+        replies: [
+          { ts: t(190), userName: '뮤즈', text: '[뮤즈] 접수했어요\n*다음을 사용하여 보냄* Muse' },
+          { ts: t(188), userName: '뮤즈', text: '[뮤즈] 좋은 생각이에요. 주제나 독자층이 기존 블로그와 겹치지 않는다면 따로 운영하는 게 정리도 잘 되고 색깔도 살릴 수 있어요. 다만 두 곳에 나눠 쓰면 관리 부담이 두 배라서 처음엔 주 1회로 가볍게 시작하는 걸 추천해요.\n*다음을 사용하여 보냄* Muse' }
+        ]
+      },
+      {
+        ts: t(1500), userName: '소망', isOwn: true, user: 'U-DEMO',
+        text: '다음 주 수요일 오후 비워 두고, 병원 예약 잡아 줘',
+        replies: [
+          { ts: t(1495), userName: '피클2', text: '[피클2] 다음 주 수요일 오후 3시로 예약 확정했어요. 캘린더에도 비워 뒀어요. 이동 시간 30분 포함해서 2시 30분에 출발하면 돼요.' }
+        ]
+      }
+    ];
+  }
+
+  /* ===================== 데이터 불러오기 ===================== */
+  function normalizeThreads(list) {
+    return list.map(function (m) {
+      var aiKey = detectAI(m);
+      return {
+        ts: m.ts,
+        user: m.user,
+        userName: (m.own ? '소망' : (m.user_name || cache.userNames[m.user] || '멤버')),
+        isOwn: !!m.own,
+        aiKey: aiKey,
+        text: m.text || '',
+        body: cleanBody(m.text || ''),
+        replies: (m.replies || []).map(function (r) {
+          var k = detectAI(r);
+          return {
+            ts: r.ts,
+            userName: (r.own ? '소망' : (r.user_name || cache.userNames[r.user] || '멤버')),
+            isOwn: !!r.own,
+            aiKey: k,
+            body: cleanBody(r.text || '')
+          };
+        }).filter(function (r) { return r.body; })
+      };
+    }).filter(function (t) { return t.body || t.replies.length; });
+  }
+
+  function loadUsers() {
+    return slack('users.list', { limit: 200 }).then(function (d) {
+      var list = d.members || [];
+      list.forEach(function (m) {
+        cache.userNames[m.id] = m.display_name || m.real_name || m.name;
+        var hay = ((m.name || '') + ' ' + (m.display_name || '') + ' ' + (m.real_name || '')).toLowerCase();
+        if (hay.indexOf('claude') >= 0) cache.userIds.claude = m.id;
+      });
+      return list;
+    }).catch(function () { return []; });
+  }
+
+  function fetchThreads() {
+    var channel = state.channel || DEFAULT_CHANNEL;
+    return slack('conversations.history', { channel: channel, limit: 40 }).then(function (d) {
+      var msgs = (d.messages || []).filter(function (m) { return !isNoise(m); });
+      var parents = msgs.filter(function (m) { return m.reply_count > 0; }).slice(0, 10);
+      return Promise.all(parents.map(function (p) {
+        return slack('conversations.replies', { channel: channel, ts: p.ts, limit: 30 })
+          .then(function (r) {
+            return { parent: p.ts, replies: (r.messages || []).slice(1) };
+          })
+          .catch(function () { return { parent: p.ts, replies: [] }; });
+      })).then(function (sets) {
+        var byParent = {};
+        sets.forEach(function (s) { byParent[s.parent] = s.replies; });
+        return msgs.map(function (m) {
+          return Object.assign({}, m, { replies: byParent[m.ts] || [] });
+        });
+      });
+    });
+  }
+
+  function refresh(manual) {
+    if (mode() === 'demo') {
+      if (!cache.loaded || manual) {
+        cache.threads = normalizeThreads(demoThreads());
+        cache.loaded = true;
+        cache.error = null;
+      }
+      renderTimeline();
+      renderStatus();
+      if (manual) toast('미리보기를 새로 고쳤어요');
+      return Promise.resolve();
+    }
+    if (cache.loading) return Promise.resolve();
+    cache.loading = true;
+    renderStatus();
+    if (!cache.loaded) renderSkeleton();
+
+    var chain = cache.userNames && Object.keys(cache.userNames).length
+      ? Promise.resolve()
+      : loadUsers().then(function () {});
+
+    return chain.then(fetchThreads).then(function (list) {
+      var normalized = normalizeThreads(list);
+      var sig = normalized.map(function (t) {
+        return t.ts + ':' + t.replies.length + ':' + t.body.length;
+      }).join('|');
+      // 보낸 직후의 낙관 카드는 실제 메시지가 들어오면 지운다
+      cache.pending = cache.pending.filter(function (p) {
+        return !normalized.some(function (t) { return t.body.indexOf(p.text) >= 0; });
+      });
+      cache.threads = normalized;
+      cache.error = null;
+      cache.loaded = true;
+      if (sig !== cache.lastSig || manual) {
+        cache.lastSig = sig;
+        renderTimeline();
+      } else {
+        renderPendingOnly();
+      }
+      if (manual) toast('새 답장을 확인했어요');
+    }).catch(function (e) {
+      cache.error = e.message || '불러오지 못했어요.';
+      if (!cache.loaded) renderTimeline();
+      renderStatus();
+      if (manual) toast(cache.error, 4200);
+    }).then(function () {
+      cache.loading = false;
+      renderStatus();
+    });
+  }
+
+  /* ===================== 렌더 ===================== */
+  function avaHTML(aiKey, size) {
+    var ai = aiKey ? aiByKey(aiKey) : null;
+    var bg = ai ? ai.bg : '#e4e9f7';
+    var fg = ai ? ai.fg : '#2b4bb5';
+    var label = ai ? ai.av : '소';
+    var cls = size === 'sm' ? 'ava sm' : 'ava';
+    return '<div class="' + cls + '" style="background:' + bg + ';color:' + fg + '">' + esc(label) + '</div>';
+  }
+
+  function renderFaces() {
+    $('faces').innerHTML = REPLY_AIS.map(function (a) {
+      return '<div class="face" style="background:' + a.bg + ';color:' + a.fg + '">' + esc(a.av) + '</div>';
+    }).join('');
+  }
+
+  function renderPills() {
+    $('pills').innerHTML = AIS.map(function (a) {
+      return '<button class="pill" role="radio" aria-checked="' + (state.target === a.key) + '" data-ai="' + a.key + '">' +
+        '<span class="dot-av" style="background:' + a.bg + ';color:' + a.fg + '">' + esc(a.av) + '</span>' +
+        esc(a.name) + '</button>';
+    }).join('');
+  }
+
+  function renderMembers() {
+    $('members').innerHTML = REPLY_AIS.map(function (a) {
+      return '<div class="member">' +
+        avaHTML(a.key) +
+        '<div class="member-body">' +
+          '<div class="member-name">' + esc(a.name) + '</div>' +
+          '<div class="member-role">' + esc(a.role) + '</div>' +
+          '<div class="member-meta"><span class="chip mono">' + esc(a.mention) + '</span><span class="chip">' + esc(a.key === 'muse' ? '10분 안에' : a.key === 'claude' ? '즉시' : '스레드 답장') + '</span></div>' +
+          '<div class="member-how">' + esc(a.how) + '</div>' +
+          '<button class="member-cta" data-ai="' + a.key + '">이 AI에게 지시하기 →</button>' +
+        '</div>' +
+      '</div>';
+    }).join('') + '<div class="member" style="align-items:center">' + avaHTML('all') +
+      '<div class="member-body"><div class="member-name">모두에게</div><div class="member-role">방 전체 · 멘션 없이</div>' +
+      '<div class="member-how">한 번 남기면 방에 있는 AI가 모두 봐요. 각자 답하고 싶은 AI가 스레드에 이어 말해요.</div></div></div>';
+  }
+
+  function replyHTML(r) {
+    var ai = r.aiKey ? aiByKey(r.aiKey) : null;
+    var accent = ai ? ai.bg : '#e6ebe9';
+    var name = ai ? ai.name : (r.isOwn ? '소망' : r.userName);
+    return '<div class="reply" style="--accent:' + (ai ? ai.fg : '#cfd7dc') + '">' +
+      avaHTML(r.aiKey, 'sm') +
+      '<div class="rbody">' +
+        '<div class="rline"><span class="rname">' + esc(name) + '</span><span class="rtime">' + when(r.ts) + '</span></div>' +
+        '<div class="rmsg">' + formatSlack(r.body) + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function cardHTML(t) {
+    var ai = t.aiKey ? aiByKey(t.aiKey) : null;
+    var name = ai ? ai.name : (t.isOwn ? '소망' : t.userName);
+    var tag = ai ? '답장' : (t.isOwn ? '지시' : '메모');
+    var tagCls = (!ai && t.isOwn) ? 'tag mine' : 'tag';
+    var link = '';
+    if (mode() === 'live' && cache.teamUrl) {
+      link = '<a class="plink" href="' + cache.teamUrl + 'archives/' + encodeURIComponent(state.channel) +
+        '/p' + String(t.ts).replace('.', '') + '" target="_blank" rel="noopener" aria-label="Slack에서 열기" title="Slack에서 열기">↗</a>';
+    }
+    var replies = t.replies.length
+      ? '<div class="replies">' + t.replies.map(replyHTML).join('') + '</div>'
+      : '';
+    return '<article class="card" data-ts="' + esc(t.ts) + '">' +
+      '<div class="card-top">' +
+        avaHTML(t.aiKey) +
+        '<div class="who"><div class="who-line"><span class="name">' + esc(name) + '</span>' +
+          '<span class="' + tagCls + '">' + tag + '</span></div>' +
+          '<div class="meta">' + when(t.ts) + (t.replies.length ? ' · 답장 ' + t.replies.length : '') + '</div>' +
+        '</div>' + link +
+      '</div>' +
+      '<div class="msg">' + formatSlack(t.body) + '</div>' +
+      replies +
+    '</article>';
+  }
+
+  function pendingHTML(p) {
+    var ai = aiByKey(p.aiKey || 'all');
+    var waiting = p.replies.length
+      ? '<div class="replies">' + p.replies.map(replyHTML).join('') + '</div>'
+      : '<div class="waiting">답장을 기다리는 중 <span class="dots"><i></i><i></i><i></i></span></div>';
+    return '<article class="card" data-ts="' + esc(p.ts) + '">' +
+      '<div class="card-top">' + avaHTML(null) +
+        '<div class="who"><div class="who-line"><span class="name">소망</span><span class="tag mine">지시</span></div>' +
+        '<div class="meta">' + clock(p.ts) + ' · ' + esc(ai.name) + '에게</div></div>' +
+      '</div>' +
+      '<div class="msg">' + formatSlack(p.text) + '</div>' + waiting +
+    '</article>';
+  }
+
+  function renderSkeleton() {
+    $('timeline').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+  }
+
+  function renderTimeline() {
+    var tl = $('timeline');
+    if (cache.loading && !cache.loaded) { renderSkeleton(); return; }
+    if (cache.error && !cache.loaded) {
+      tl.innerHTML = '<div class="empty"><b>불러오지 못했어요</b>' + esc(cache.error) + '<br><br>설정 탭에서 프록시 URL과 토큰을 확인해 주세요.</div>';
+      $('count').textContent = '0';
+      renderDecisions();
+      return;
+    }
+    var list = cache.pending.map(pendingHTML).join('') + cache.threads.map(cardHTML).join('');
+    if (!list) {
+      tl.innerHTML = '<div class="empty"><b>아직 대화가 없어요</b>위에 할 일을 적어 AI에게 첫 지시를 남겨 보세요.</div>';
+    } else {
+      tl.innerHTML = list;
+    }
+    $('count').textContent = String(cache.threads.length + cache.pending.length);
+    renderDecisions();
+  }
+
+  function renderPendingOnly() {
+    var first = document.querySelector('#timeline .card');
+    var html = cache.pending.map(pendingHTML).join('');
+    if (!html) { renderTimeline(); return; }
+    if (first && first.getAttribute('data-ts') === cache.pending[0].ts) return;
+    renderTimeline();
+  }
+
+  function renderDecisions() {
+    var box = $('decisions');
+    var found = [];
+    cache.threads.forEach(function (t) {
+      t.replies.forEach(function (r) {
+        if (/결정|확정|하기로|정했|예약/.test(r.body) && r.aiKey) {
+          var line = r.body.split('\n')[0].replace(/^[•\-*]\s*/, '');
+          if (line.length > 78) line = line.slice(0, 76) + '…';
+          found.push({ who: (aiByKey(r.aiKey) || {}).name || 'AI', text: line });
+        }
+      });
+    });
+    found = found.slice(0, 3);
+    if (!found.length) { box.hidden = true; box.innerHTML = ''; return; }
+    box.hidden = false;
+    box.innerHTML = '<h3>최근 결정</h3><ul>' + found.map(function (f) {
+      return '<li><span>' + esc(f.who) + '</span><div>' + esc(f.text) + '</div></li>';
+    }).join('') + '</ul>';
+  }
+
+  function renderStatus() {
+    var st = $('statusText'), dot = $('statusDot');
+    if (mode() === 'demo') {
+      st.textContent = '미리보기 모드';
+      dot.className = 'status-dot off';
+    } else if (cache.loading) {
+      st.textContent = '확인 중…';
+      dot.className = 'status-dot';
+    } else {
+      st.textContent = '5종 AI 자동 응답';
+      dot.className = 'status-dot' + (state.poll ? '' : ' off');
+    }
+    $('poll').checked = !!state.poll;
+    $('sw-poll').checked = !!state.poll;
+    var note = $('modeNote');
+    if (mode() === 'demo') {
+      note.hidden = false;
+      note.textContent = liveCredentials()
+        ? '미리보기 모드가 켜져 있어요. 설정에서 끄면 진짜 Slack 대화가 보여요.'
+        : '아직 Slack을 연결하지 않아 예시 대화로 보여 주고 있어요. 설정 탭에서 연결하면 진짜 대화가 나와요.';
+    } else {
+      note.hidden = true;
+    }
+    $('refresh').classList.toggle('spin', cache.loading);
+  }
+
+  function renderSettings() {
+    $('in-token').value = state.token || '';
+    $('in-channel').value = state.channel || DEFAULT_CHANNEL;
+    $('in-proxy').value = state.proxy || '';
+    $('sw-worker').checked = !!state.workerToken;
+    $('sw-demo').checked = !!state.demo;
+    $('sw-poll').checked = !!state.poll;
+    var c = $('conn');
+    if (mode() === 'live') {
+      c.className = 'conn ok';
+      c.textContent = '연결 설정이 저장돼 있어요. 채널 ' + (state.channel || DEFAULT_CHANNEL) + ' · ' +
+        (state.proxy ? 'Worker 프록시 사용' : 'Slack 직접 연결');
+    } else {
+      c.className = 'conn';
+      c.textContent = '아직 연결하지 않았어요. 미리보기로 화면을 먼저 볼 수 있어요.';
+    }
+  }
+
+  function renderAll() {
+    renderPills();
+    renderMembers();
+    renderStatus();
+    renderSettings();
+    renderTimeline();
+  }
+
+  /* ===================== 동작 ===================== */
+  function switchTab(name) {
+    ['chat', 'members', 'settings'].forEach(function (k) {
+      var tab = $('tab-' + k), panel = $('panel-' + k);
+      var on = k === name;
+      tab.setAttribute('aria-selected', on ? 'true' : 'false');
+      panel.hidden = !on;
+    });
+    if (name === 'settings') renderSettings();
+    if (name === 'chat') { renderTimeline(); renderStatus(); }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function chooseTarget(key) {
+    state.target = key;
+    saveState();
+    renderPills();
+    var ta = $('input');
+    var ai = aiByKey(key);
+    if (ai && ai.prefix) {
+      ta.placeholder = '예: ' + (key === 'pickle' ? '이번 주 육아용품 쿠팡 반품 특가 정리해줘' : '내일 일정 정리해서 알려줘');
+    } else {
+      ta.placeholder = '예: 이번 주 육아용품 쿠팡 반품 특가 정리해줘';
+    }
+    ta.focus({ preventScroll: true });
+  }
+
+  function composeText(ai, text) {
+    if (!ai || ai.key === 'all') return text;
+    var already = /(^|\s)@(피클2|피클|뮤즈|클로드|Claude|챗GPT|ChatGPT)\b/i.test(text);
+    if (already) return text;
+    var prefix = ai.prefix;
+    if (ai.key === 'claude') prefix = claudeId() ? '<@' + claudeId() + '>' : '@Claude';
+    return prefix + ' ' + text;
+  }
+
+  function grow() {
+    var ta = $('input');
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 220) + 'px';
+  }
+
+  function send() {
+    var ta = $('input');
+    var text = ta.value.trim();
+    if (!text) { toast('시킬 일을 먼저 적어 주세요'); ta.focus(); return; }
+    var ai = aiByKey(state.target) || aiByKey('all');
+    var out = composeText(ai, text);
+    var btn = $('send');
+
+    btn.disabled = true;
+    btn.textContent = '남기는 중…';
+
+    var pending = {
+      ts: String(Date.now() / 1000),
+      text: text,
+      aiKey: ai.key,
+      replies: []
+    };
+
+    slack('chat.postMessage', { channel: state.channel || DEFAULT_CHANNEL, text: out })
+      .then(function (res) {
+        pending.ts = res.ts || pending.ts;
+        ta.value = '';
+        grow();
+        if (mode() === 'demo') {
+          cache.pending.unshift(pending);
+          renderTimeline();
+          simulateReply(pending, ai);
+        } else {
+          cache.pending.unshift(pending);
+          renderTimeline();
+          setTimeout(function () { refresh(false); }, 900);
+        }
+        toast(ai.key === 'all' ? '방에 남겼어요. AI들이 이어서 답할 거예요' : ai.name + '에게 남겼어요');
+      })
+      .catch(function (e) {
+        toast(e.message || '보내지 못했어요', 4200);
+      })
+      .then(function () {
+        btn.disabled = false;
+        btn.textContent = '지시 남기기';
+      });
+  }
+
+  function simulateReply(pending, ai) {
+    setTimeout(function () {
+      var who = ai.key === 'all' ? '피클' : ai.name;
+      var nameOf = function (k) { var a = aiByKey(k); return a ? a.name : who; };
+      var items = [];
+      items.push({
+        ts: String(Date.now() / 1000),
+        userName: nameOf(ai.key === 'all' ? 'pickle' : ai.key),
+        aiKey: ai.key === 'all' ? 'pickle' : ai.key,
+        body: '[' + (ai.key === 'all' ? '피클' : ai.name) + '] 접수했어요. 미리보기라서 진짜 답장은 아니에요. Slack을 연결하면 여기에 실제 답장이 와요.'
+      });
+      if (ai.key === 'all') {
+        items.push({
+          ts: String(Date.now() / 1000 + 1),
+          userName: '뮤즈', aiKey: 'muse',
+          body: '[뮤즈] 저도 같이 볼게요. 정리된 내용은 스레드에 남겨 둘게요. (미리보기)'
+        });
+      }
+      pending.replies = items;
+      renderTimeline();
+    }, 1500);
+  }
+
+  function testConnection() {
+    readSettings();
+    var c = $('conn');
+    c.className = 'conn';
+    c.textContent = '확인 중…';
+    var auth = null;
+    slack('auth.test', {}).then(function (d) {
+      auth = d;
+      if (d.url) cache.teamUrl = d.url.replace(/\/?$/, '/');
+      return slack('conversations.info', { channel: state.channel || DEFAULT_CHANNEL });
+    }).then(function (info) {
+      c.className = 'conn ok';
+      c.textContent = '연결됐어요! ' + (auth.team || '워크스페이스') + ' · #' +
+        ((info.channel && info.channel.name) || (state.channel || DEFAULT_CHANNEL)) +
+        (mode() === 'demo' ? ' (지금은 미리보기 모드예요)' : '');
+    }).catch(function (e) {
+      c.className = 'conn err';
+      c.textContent = e.message || '연결하지 못했어요.';
+    });
+  }
+
+  function readSettings() {
+    state.token = $('in-token').value.trim();
+    state.channel = ($('in-channel').value.trim() || DEFAULT_CHANNEL);
+    var p = $('in-proxy').value.trim();
+    if (p && !/^https?:\/\//i.test(p)) p = 'https://' + p;
+    state.proxy = p;
+    state.workerToken = $('sw-worker').checked;
+    state.demo = $('sw-demo').checked;
+    state.poll = $('sw-poll').checked;
+  }
+
+  function saveSettings() {
+    readSettings();
+    saveState();
+    cache.loaded = false;
+    cache.lastSig = '';
+    renderStatus();
+    renderSettings();
+    toast('저장했어요');
+    refresh(true);
+    setupPoll();
+    switchTab('chat');
+  }
+
+  function setupPoll() {
+    clearInterval(pollTimer);
+    pollTimer = null;
+    if (!state.poll) return;
+    pollTimer = setInterval(function () {
+      if (document.hidden) return;
+      refresh(false);
+    }, 20000);
+  }
+
+  function bind() {
+    document.querySelectorAll('.tab').forEach(function (t) {
+      t.addEventListener('click', function () { switchTab(t.getAttribute('data-tab')); });
+    });
+
+    $('pills').addEventListener('click', function (e) {
+      var b = e.target.closest('.pill');
+      if (b) chooseTarget(b.getAttribute('data-ai'));
+    });
+
+    $('members').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-ai]');
+      if (!b) return;
+      chooseTarget(b.getAttribute('data-ai'));
+      switchTab('chat');
+    });
+
+    $('input').addEventListener('input', grow);
+    $('input').addEventListener('keydown', function (e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') send();
+    });
+    $('send').addEventListener('click', send);
+    $('refresh').addEventListener('click', function () { refresh(true); });
+
+    $('poll').addEventListener('change', function () {
+      state.poll = this.checked;
+      saveState();
+      renderStatus();
+      setupPoll();
+      if (state.poll) refresh(false);
+    });
+    $('sw-poll').addEventListener('change', function () {
+      state.poll = this.checked;
+      saveState();
+      renderStatus();
+      setupPoll();
+      if (state.poll) refresh(false);
+    });
+
+    $('btn-test').addEventListener('click', testConnection);
+    $('btn-save').addEventListener('click', saveSettings);
+    $('btn-clear').addEventListener('click', function () {
+      state.token = '';
+      $('in-token').value = '';
+      saveState();
+      renderSettings();
+      cache.loaded = false;
+      toast('토큰을 지웠어요');
+      refresh(false);
+    });
+
+    $('sw-demo').addEventListener('change', function () {
+      state.demo = this.checked;
+      saveState();
+      cache.loaded = false;
+      cache.lastSig = '';
+      renderStatus();
+      renderSettings();
+      refresh(false);
+      toast(state.demo ? '미리보기 모드로 바꿨어요' : (liveCredentials() ? 'Slack 연결로 바꿨어요' : '연결 정보가 없어 미리보기로 보여요'));
+    });
+
+    $('sw-worker').addEventListener('change', function () {
+      state.workerToken = this.checked;
+      saveState();
+      renderSettings();
+    });
+
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) refresh(false);
+    });
+  }
+
+  function init() {
+    loadState();
+    renderFaces();
+    bind();
+    renderAll();
+    grow();
+    refresh(false);
+    setupPoll();
+    // 첫 화면이 비어 보이지 않도록 도움말
+    if (mode() === 'demo' && !cache.loaded) {
+      setTimeout(function () { if (mode() === 'demo') refresh(false); }, 0);
+    }
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>
