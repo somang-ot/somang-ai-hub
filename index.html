@@ -460,6 +460,7 @@
   /* ===================== 기본값 ===================== */
   var STORE = 'somang-ai-hub:v1';
   var DEFAULT_CHANNEL = 'C0CHQCP2KPD';
+  var DEFAULT_PROXY = 'https://somang-slack-proxy.cheonsomang.workers.dev';
 
   var AIS = [
     { key:'all', name:'모두에게', av:'📣', prefix:null, bg:'#e9eef1', fg:'#334155',
@@ -490,8 +491,8 @@
   };
 
   var state = {
-    token: '', channel: DEFAULT_CHANNEL, proxy: '',
-    workerToken: false, demo: false, poll: true,
+    token: '', channel: DEFAULT_CHANNEL, proxy: DEFAULT_PROXY,
+    workerToken: true, demo: false, poll: true,
     target: 'all'
   };
 
@@ -550,6 +551,10 @@
       Object.keys(state).forEach(function (k) { if (o[k] !== undefined) state[k] = o[k]; });
     } catch (e) {}
     if (!state.channel) state.channel = DEFAULT_CHANNEL;
+    if (!state.proxy) {
+      state.proxy = DEFAULT_PROXY;
+      if (!state.token) state.workerToken = true;
+    }
   }
   function saveState() {
     try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
