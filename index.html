@@ -727,21 +727,23 @@
   /* ===================== 데이터 불러오기 ===================== */
   function normalizeThreads(list) {
     return list.map(function (m) {
+      var own = !!(m.own || m.isOwn);
       var aiKey = detectAI(m);
       return {
         ts: m.ts,
         user: m.user,
-        userName: (m.own ? '소망' : (m.user_name || cache.userNames[m.user] || '멤버')),
-        isOwn: !!m.own,
+        userName: (own ? '소망' : (m.user_name || cache.userNames[m.user] || '멤버')),
+        isOwn: own,
         aiKey: aiKey,
         text: m.text || '',
         body: cleanBody(m.text || ''),
         replies: (m.replies || []).map(function (r) {
+          var rOwn = !!(r.own || r.isOwn);
           var k = detectAI(r);
           return {
             ts: r.ts,
-            userName: (r.own ? '소망' : (r.user_name || cache.userNames[r.user] || '멤버')),
-            isOwn: !!r.own,
+            userName: (rOwn ? '소망' : (r.user_name || cache.userNames[r.user] || '멤버')),
+            isOwn: rOwn,
             aiKey: k,
             body: cleanBody(r.text || '')
           };
