@@ -552,7 +552,7 @@
     try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
   }
   function liveCredentials() {
-    return !!(state.token || (state.proxy && state.workerToken));
+    return !!(state.token || state.proxy);
   }
   function mode() {
     if (state.demo) return 'demo';
@@ -789,8 +789,8 @@
         cache.threads = normalizeThreads(demoThreads());
         cache.loaded = true;
         cache.error = null;
+        renderTimeline();
       }
-      renderTimeline();
       renderStatus();
       if (manual) toast('미리보기를 새로 고쳤어요');
       return Promise.resolve();
@@ -800,9 +800,14 @@
     renderStatus();
     if (!cache.loaded) renderSkeleton();
 
-    var chain = cache.userNames && Object.keys(cache.userNames).length
-      ? Promise.resolve()
-      : loadUsers().then(function () {});
+    var chain = Object.keys(cache.userNames).length ? Promise.resolve() : loadUsers().then(function () {});
+    if (!cache.teamUrl) {
+      chain = chain.then(function () {
+        return slack('auth.test', {}).then(function (d) {
+          if (d && d.url) cache.teamUrl = d.url.replace(/\/?$/, '/');
+        }).catch(function () {});
+      });
+    }
 
     return chain.then(fetchThreads).then(function (list) {
       var normalized = normalizeThreads(list);
@@ -941,22 +946,19 @@
       renderDecisions();
       return;
     }
-    var list = cache.pending.map(pendingHTML).join('') + cache.threads.map(cardHTML).join('');
-    if (!list) {
-      tl.innerHTML = '<div class="empty"><b>아직 대화가 없어요</b>위에 할 일을 적어 AI에게 첫 지시를 남겨 보세요.</div>';
-    } else {
-      tl.innerHTML = list;
-    }
+    var threads = cache.threads.map(cardHTML).join('');
+    var list = '<div id="pendingWrap">' + cache.pending.map(pendingHTML).join('') + '</div>' +
+      (threads || (cache.pending.length ? '' : '<div class="empty"><b>아직 대화가 없어요</b>위에 할 일을 적어 AI에게 첫 지시를 남겨 보세요.</div>'));
+    tl.innerHTML = list;
     $('count').textContent = String(cache.threads.length + cache.pending.length);
     renderDecisions();
   }
 
+  // 타임라인 전체를 다시 그리지 않고, 방금 보낸 지시 카드만 갱신한다.
   function renderPendingOnly() {
-    var first = document.querySelector('#timeline .card');
-    var html = cache.pending.map(pendingHTML).join('');
-    if (!html) { renderTimeline(); return; }
-    if (first && first.getAttribute('data-ts') === cache.pending[0].ts) return;
-    renderTimeline();
+    var wrap = document.getElementById('pendingWrap');
+    if (!wrap) { renderTimeline(); return; }
+    wrap.innerHTML = cache.pending.map(pendingHTML).join('');
   }
 
   function renderDecisions() {
@@ -1096,13 +1098,11 @@
         pending.ts = res.ts || pending.ts;
         ta.value = '';
         grow();
+        cache.pending.unshift(pending);
+        if (cache.loaded) renderPendingOnly(); else renderTimeline();
         if (mode() === 'demo') {
-          cache.pending.unshift(pending);
-          renderTimeline();
           simulateReply(pending, ai);
         } else {
-          cache.pending.unshift(pending);
-          renderTimeline();
           setTimeout(function () { refresh(false); }, 900);
         }
         toast(ai.key === 'all' ? '방에 남겼어요. AI들이 이어서 답할 거예요' : ai.name + '에게 남겼어요');
@@ -1135,7 +1135,7 @@
         });
       }
       pending.replies = items;
-      renderTimeline();
+      renderPendingOnly();
     }, 1500);
   }
 
@@ -1166,6 +1166,8 @@
     var p = $('in-proxy').value.trim();
     if (p && !/^https?:\/\//i.test(p)) p = 'https://' + p;
     state.proxy = p;
+    // 프록시만 넣고 토큰을 비워 두면 Worker가 토큰을 갖고 있다고 본다.
+    if (p && !state.token) $('sw-worker').checked = true;
     state.workerToken = $('sw-worker').checked;
     state.demo = $('sw-demo').checked;
     state.poll = $('sw-poll').checked;
