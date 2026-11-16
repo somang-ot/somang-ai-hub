@@ -932,7 +932,7 @@
     return '<article class="card" data-ts="' + esc(p.ts) + '">' +
       '<div class="card-top">' + avaHTML(null) +
         '<div class="who"><div class="who-line"><span class="name">소망</span><span class="tag mine">지시</span></div>' +
-        '<div class="meta">' + clock(p.ts) + ' · ' + esc(ai.name) + '에게</div></div>' +
+        '<div class="meta">' + clock(p.ts) + ' · ' + esc(ai.key === 'all' ? '방 전체' : ai.name + '에게') + '</div></div>' +
       '</div>' +
       '<div class="msg">' + formatSlack(p.text) + '</div>' + waiting +
     '</article>';
