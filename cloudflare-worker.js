@@ -1,6 +1,7 @@
 // somang-ai-hub · Slack CORS 프록시 (Cloudflare Worker)
 // 휴대폰 브라우저에서 slack.com/api 를 직접 부르면 CORS에 막히므로, 이 Worker가 대신 전달한다.
 // Worker 설정 → 변수: ALLOWED_ORIGIN (예: https://somang-ot.github.io), SLACK_TOKEN (선택, Secret)
+// Slack 은 conversations.info / replies 를 JSON 본문으로 받지 않으므로 form 으로 바꿔서 보낸다.
 
 export default {
   async fetch(request, env) {
@@ -19,22 +20,22 @@ export default {
       return reply({ ok: false, error: 'method_not_allowed' }, 400, cors);
     }
 
-    // 본문에 토큰이 없으면 Worker 시크릿 토큰을 붙인다. → 폰에는 토큰을 저장하지 않아도 된다.
-    const raw = await request.text();
-    let body = raw;
-    try {
-      const data = JSON.parse(raw || '{}');
-      if (!data.token && env.SLACK_TOKEN) {
-        data.token = env.SLACK_TOKEN;
-        body = JSON.stringify(data);
-      }
-    } catch (_) { /* JSON이 아니면 그대로 전달 */ }
+    // 본문 JSON → form. 토큰은 Slack 이 form/헤더에서만 읽으므로 Authorization 헤더로 보낸다.
+    let data = {};
+    try { data = JSON.parse((await request.text()) || '{}') || {}; } catch (_) { /* JSON이 아니면 빈 값 */ }
+    const form = new URLSearchParams();
+    for (const key of Object.keys(data)) {
+      const v = data[key];
+      if (key === 'token' || v === undefined || v === null) continue;
+      form.set(key, typeof v === 'object' ? JSON.stringify(v) : String(v));
+    }
 
-    const auth = request.headers.get('Authorization');
+    const auth = request.headers.get('Authorization') ||
+      (data.token ? 'Bearer ' + data.token : env.SLACK_TOKEN ? 'Bearer ' + env.SLACK_TOKEN : null);
     const upstream = await fetch('https://slack.com/api/' + method, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json; charset=utf-8', ...(auth ? { Authorization: auth } : {}) },
-      body,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8', ...(auth ? { Authorization: auth } : {}) },
+      body: form.toString(),
     });
 
     return new Response(upstream.body, {

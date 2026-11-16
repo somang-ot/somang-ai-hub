@@ -55,6 +55,9 @@ Slack 채널 **#소망-ai-협업방-전체** 를 저장소로 쓰는, 폰에서 
 > `SLACK_TOKEN` 을 Secret으로 넣었다면 앱 설정에서 **Worker에 토큰 보관** 을 켜고, Slack 토큰 칸은 비워 두세요.
 > 넣지 않았다면 앱 설정의 Slack 토큰 칸에 `xoxb-…` 를 직접 넣습니다.
 
+> Worker는 앱이 보낸 JSON 본문을 Slack이 받는 **form-urlencoded** 로 바꿔 전달하고, 토큰은 `Authorization: Bearer …` 헤더로 보냅니다.
+> Slack은 JSON 본문의 `token` 을 무시하고, `conversations.info`·`conversations.replies` 같은 메서드는 JSON 본문 자체를 받지 않기 때문입니다.
+
 ## 3. 앱에 연결
 
 앱 우측 상단 **설정** 탭에서:
