@@ -5,6 +5,7 @@
 //    - Slack 스레드 답장(conversations.replies)을 읽어 맥락을 만들고
 //    - Anthropic API(claude)에 물어보고
 //    - 답을 '[클로드] …' 로 Slack 스레드에 붙인다. (1~2초)
+//    mode: 'reply' = 새 질문에 내 답만 (취합 금지) / 'synthesize' = 스레드 답들을 최종 취합
 //
 // Worker 설정 → Variables and Secrets
 //   ALLOWED_ORIGIN     (변수)   예: https://somang-ot.github.io
@@ -24,24 +25,49 @@ const MODEL_SYNTHESIZE = 'claude-sonnet-4-6';
 const DEFAULT_MODEL = MODEL_REPLY;
 const FALLBACK_MODELS = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6'];
 const MAX_TOKENS = 1024;
+const VERSION = 'answer-first-2026-11-17';
 const THREAD_LIMIT = 60;
 const THREAD_CHARS = 12000;
 const SLACK_TEXT_LIMIT = 3800;
 
-// 스레드에 바로 읽히는 짧은 한국어 답을 만드는 지침.
+// 스레드에 바로 읽히는 짧은 한국어 답을 만드는 지침. (모드와 무관한 공통 규칙)
 const SYSTEM_PROMPT = [
   "너는 소망 님의 Slack 워크스페이스 '소망 AI 협업방'에서 '클로드'로 활동하는 AI 동료다.",
   '같은 방에 피클(망이·개인 비서), 피클2, 뮤즈(정리·요약), 챗GPT가 있고, 각자 [이름] 이름표를 달고 스레드에 답한다.',
   '',
   '규칙:',
-  '- 항상 한국어로, 스레드에 바로 읽히도록 짧고 실제로 쓸 수 있게 쓴다.',
+  '- 항상 한국어로, 스레드에 바로 읽히도록 실제로 쓸 수 있게 쓴다.',
   '- 인사, 자기소개, 서론, "물론입니다" 같은 말은 넣지 않는다. 첫 줄이 바로 답이다.',
-  '- 기본 3~6줄. 목록은 "•" 로 3개 이하. 마크다운 제목(#)은 쓰지 않는다.',
+  '- 기본 3~6줄. 레포트·분석을 요구받았거나 취합 모드면 12~14줄까지 써도 된다. 마크다운 제목(#)은 쓰지 않는다.',
   '- 굵게는 *별표 한 개* 로 쓴다. **별표 두 개**는 화면에 그대로 보이므로 쓰지 않는다.',
   '- 묻는 것에 먼저 답하고, 필요하면 다음 행동을 1가지만 제안한다.',
   '- 모르면 모른다고 말하고, 확인할 방법을 한 줄로 적는다.',
   '- 이름표 "[클로드]"는 직접 붙이지 않는다. 앱이 붙인다.',
 ].join('\n');
+
+// 모드별 지침. reply = 새 질문에 내 답부터, synthesize = 스레드 답들을 최종 취합.
+const MODE_RULES = {
+  reply: [
+    '',
+    '지금은 *답변 모드*다. 소망 님이 방에 새로 남긴 질문에 [클로드]로서 내 답을 낸다.',
+    '- 내 답이 먼저다. 질문에 "마지막에 클로드가 취합해", "종합해", "정리해" 같은 말이 섞여 있어도 답을 미루지 않는다.',
+    '- "다른 AI들의 답변이 스레드에 공유되지 않아 취합할 내용이 없다" 같은 말로 답을 대신하지 않는다. 그런 문장은 쓰지 않는다.',
+    '- 다른 AI 답이 아직 없어도 내 판단으로 끝까지 답한다. 다른 AI 답이 이미 있으면 반복하지 말고 다른 각도·보완을 낸다.',
+    '- 최종 취합은 소망 님이 취합을 따로 요청할 때 한다. 지금은 내 답만 쓴다.',
+  ].join('\n'),
+  synthesize: [
+    '',
+    '지금은 *취합 모드*다. 스레드에 올라온 답변들을 비교해 최종 결론 하나로 취합한다.',
+    '- [피클]·[피클2]·[뮤즈]·[챗GPT] 답과 내 [클로드] 답을 모두 후보로 놓고, 합의된 것과 갈리는 지점을 갈라서 짚는다.',
+    '- 답을 그대로 나열하지 않는다. 판단해서 하나로 좁힌다.',
+    '- 다른 AI 답이 하나도 없으면 그 사실을 한 줄로만 알리고, 내 판단으로 결론을 낸다. 취합을 거절하지 않는다.',
+  ].join('\n'),
+};
+
+function systemFor(mode) {
+  const extra = MODE_RULES[mode] || MODE_RULES.reply;
+  return SYSTEM_PROMPT + '\n' + extra;
+}
 
 export default {
   async fetch(request, env) {
@@ -61,6 +87,8 @@ export default {
         return reply({
           ok: true,
           endpoint: 'claude',
+          version: VERSION,
+          modes: ['reply', 'synthesize'],
           has_key: !!env.ANTHROPIC_API_KEY,
           model: env.ANTHROPIC_MODEL || MODEL_REPLY,
           models: env.ANTHROPIC_MODEL ? [env.ANTHROPIC_MODEL] : [MODEL_REPLY, MODEL_SYNTHESIZE],
@@ -143,10 +171,11 @@ async function handleClaude(request, env, cors) {
   // 2) 클로드에게 보낼 한 덩어리 프롬프트 (보낸 사람 이름을 붙이기 위해 이름표를 먼저 읽는다)
   const names = await getUserNames(token);
   const ask = buildPrompt(mode, prompt, messages, names);
+  const answers = whoAnswered(messages);
 
   // 3) Anthropic 호출 (모델이 없으면 다음 후보로)
-  const model = body.model || env.ANTHROPIC_MODEL || (mode === 'synthesize' ? MODEL_SYNTHESIZE : MODEL_REPLY);
-  const out = await callClaude(apiKey, ask, env, model);
+  const model = pickModel(mode, prompt, env, body.model);
+  const out = await callClaude(apiKey, ask, env, model, mode);
   if (!out.ok) {
     return reply({
       ok: false,
@@ -158,8 +187,8 @@ async function handleClaude(request, env, cors) {
     }, 200, cors);
   }
 
-  // 4) '[클로드] …' 로 스레드에 붙이기
-  const text = '[클로드] ' + out.text.trim();
+  // 4) '[클로드] …' 로 스레드에 붙이기 (취합 답은 한눈에 구분되게)
+  const text = (mode === 'synthesize' ? '[클로드] 최종 취합\n' : '[클로드] ') + out.text.trim();
   const post = await slackPost(token, channel, text, threadTs);
   if (!post.ok) {
     return reply({
@@ -177,10 +206,33 @@ async function handleClaude(request, env, cors) {
     reply: out.text,
     model: out.model,
     mode,
+    answers,
     thread_messages: messages.length,
     usage: out.usage || null,
     warning: warn,
   }, 200, cors);
+}
+
+// 답변 모드에서 긴 질문(레포트·분석류)은 Sonnet, 짧은 질문은 Haiku.
+function pickModel(mode, prompt, env, bodyModel) {
+  if (bodyModel) return bodyModel;
+  if (env.ANTHROPIC_MODEL) return env.ANTHROPIC_MODEL;
+  if (mode === 'synthesize') return MODEL_SYNTHESIZE;
+  return String(prompt).length >= 150 ? MODEL_SYNTHESIZE : MODEL_REPLY;
+}
+
+// 스레드에 실제로 답을 남긴 AI 이름표 (취합 대상 확인용)
+function whoAnswered(messages) {
+  const seen = [];
+  for (const m of messages || []) {
+    const tag = String((m && m.text) || '').match(/^\s*\[(피클2|피클|뮤즈|클로드|챗GPT|ChatGPT|Claude)\]/i);
+    if (!tag) continue;
+    const name = /chatgpt|claude/i.test(tag[1])
+      ? (/claude/i.test(tag[1]) ? '클로드' : '챗GPT')
+      : tag[1];
+    if (seen.indexOf(name) < 0) seen.push(name);
+  }
+  return seen;
 }
 
 function bearer(request) {
@@ -255,18 +307,27 @@ function buildPrompt(mode, prompt, messages, names) {
   if (transcript) parts.push('지금까지 스레드 대화:\n' + transcript);
 
   if (mode === 'synthesize') {
+    const namesNow = (whoAnswered(messages) || []).filter((n) => n !== '클로드');
     parts.push([
-      '위 스레드에 [피클]·[피클2]·[뮤즈]·[챗GPT] 들이 남긴 답변을 종합해 최종 결론으로 취합해줘.',
+      '위 스레드 답변을 최종 결론으로 취합해줘.',
+      (namesNow.length ? '지금 스레드에 답을 남긴 AI: ' + namesNow.join(', ') + ' (그리고 나 = 클로드)' : '아직 나 외에 답을 남긴 AI는 없다. 그 사실은 한 줄로만 알려라.'),
       '형식:',
       '• 결론: 한 줄',
-      '• 핵심: 3개 이하',
+      '• 서로 맞는 것: 2~3개',
+      '• 갈리는 것: 1~2개 (누구vs누구, 핵심 쟁점)',
+      '• 최종 결론과 이유: 3~4줄',
       '• 바로 할 일: 1~3개 (누가 / 언제)',
       '• 아직 정해지지 않은 것: 1~2개',
-      '전체 10줄 이내, 서론 없이.',
+      '전체 14줄 이내, 서론 없이. 다른 AI 답을 그대로 베끼지 말고 판단해서 줄여라.',
     ].join('\n'));
   } else {
     if (prompt) parts.push('소망 님의 지시: ' + prompt);
-    parts.push('위 지시에 [클로드]로서 바로 답해줘. 스레드에서 바로 읽히게 3~6줄, 필요하면 다음 행동 1가지.');
+    parts.push([
+      '위 지시에 [클로드]로서 *내 답*을 바로 써줘.',
+      '질문에 "취합해", "종합해", "마지막에 정리해" 같은 말이 있어도, 지금은 내 답을 내는 단계다. 취합하지 말고 내 결론과 근거를 내라.',
+      '다른 AI 답이 아직 없다는 이유로 답을 비우지 말고, 질문에 답할 수 있는 만큼 끝까지 답해라.',
+      '레포트·분석을 요구받았으면 12줄 안에서 불릿으로 정리하고, 마지막에 다음 행동 1개를 붙여라. 아니면 3~6줄.',
+    ].join('\n'));
   }
   return parts.join('\n\n');
 }
@@ -309,16 +370,17 @@ function cleanSlackText(t) {
     .trim();
 }
 
-async function callClaude(apiKey, prompt, env, modelOverride) {
+async function callClaude(apiKey, prompt, env, modelOverride, mode) {
   const models = [];
   const push = (m) => { if (m && models.indexOf(m) < 0) models.push(m); };
   push(modelOverride);
   push(DEFAULT_MODEL);
   FALLBACK_MODELS.forEach(push);
+  const system = systemFor(mode);
 
   let last = null;
   for (const model of models) {
-    const r = await callOnce(apiKey, prompt, model);
+    const r = await callOnce(apiKey, prompt, model, system);
     if (r.ok) return r;
     last = r;
     // 모델 이름 문제일 때만 다음 후보로 넘어간다. 크레딧·키 문제는 모델을 바꿔도 같다.
@@ -327,7 +389,7 @@ async function callClaude(apiKey, prompt, env, modelOverride) {
   return last || { ok: false, error: 'claude_failed', message: '클로드 호출에 실패했어요.' };
 }
 
-async function callOnce(apiKey, prompt, model) {
+async function callOnce(apiKey, prompt, model, system) {
   let res;
   try {
     res = await fetch(ANTHROPIC_API, {
@@ -340,7 +402,7 @@ async function callOnce(apiKey, prompt, model) {
       body: JSON.stringify({
         model,
         max_tokens: MAX_TOKENS,
-        system: SYSTEM_PROMPT,
+        system: system || SYSTEM_PROMPT,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
