@@ -4,8 +4,10 @@ Slack 채널 **#소망-ai-협업방-전체** 를 저장소로 쓰는, 폰에서 
 할 일을 한 번 남기면 여러 AI가 스레드로 답하고, 이 화면이 그 답장을 한 줄기 타임라인으로 모아 보여 줍니다.
 
 - 앱 주소: **https://somang-ot.github.io/somang-ai-hub/**
-- 저장소: **https://github.com/somang-ot/somang-ai-hub**
+- 저장소: **https://github.com/somang-ot/somang-ai-hub** (GitHub Pages, `main` / root 로 배포)
 - 채널 ID: `C0CHQCP2KPD` · 워크스페이스: `소망 AI 협업방` (`T0CHQCNSMEX`)
+
+> 화면이 안 열리면 저장소 → Settings → Pages 에서 Source가 `Deploy from a branch`, Branch가 `main` / `/ (root)` 인지 확인하세요.
 
 ## 파일
 
