@@ -11,12 +11,14 @@
 //   ALLOWED_ORIGIN     (변수)   예: https://somang-ot.github.io
 //   SLACK_TOKEN        (Secret) xoxb-…  (Slack 읽기/쓰기)
 //   ANTHROPIC_API_KEY  (Secret) sk-ant-… (클로드 호출)
+//   OPENAI_API_KEY     (Secret) sk-proj-… (챗GPT 호출)
 //   ANTHROPIC_MODEL    (변수, 선택) 예: claude-sonnet-4-6
 //   SLACK_CHANNEL      (변수, 선택) 기본 채널 ID
 
 const SLACK_API = 'https://slack.com/api/';
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
+const OPENAI_API = 'https://api.openai.com/v1/chat/completions';
 
 const DEFAULT_CHANNEL = 'C0CHQCP2KPD';
 // 답장은 빠르게(Haiku), 취합은 더 꼼꼼하게(Sonnet). env.ANTHROPIC_MODEL 이 있으면 그것을 먼저 쓴다.
@@ -26,6 +28,7 @@ const DEFAULT_MODEL = MODEL_REPLY;
 const FALLBACK_MODELS = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6'];
 const MAX_TOKENS = 1024;
 const VERSION = 'answer-first-2026-11-17';
+const MODEL_GPT = 'gpt-4o-mini';
 const THREAD_LIMIT = 60;
 const THREAD_CHARS = 12000;
 const SLACK_TEXT_LIMIT = 3800;
@@ -39,7 +42,7 @@ const SYSTEM_PROMPT = [
   '- 항상 한국어로, 스레드에 바로 읽히도록 실제로 쓸 수 있게 쓴다.',
   '- 인사, 자기소개, 서론, "물론입니다" 같은 말은 넣지 않는다. 첫 줄이 바로 답이다.',
   '- 기본 3~6줄. 레포트·분석을 요구받았거나 취합 모드면 12~14줄까지 써도 된다. 마크다운 제목(#)은 쓰지 않는다.',
-  '- 굵게는 *별표 한 개* 로 쓴다. **별표 두 개**는 화면에 그대로 보이므로 쓰지 않는다.',
+  '- 이 방은 Slack이다. 굵게는 *별표 한 개*, 목록은 "•", 제목(#) 없음. **나 ## 를 쓰면 화면에 그대로 보인다.',
   '- 묻는 것에 먼저 답하고, 필요하면 다음 행동을 1가지만 제안한다.',
   '- 모르면 모른다고 말하고, 확인할 방법을 한 줄로 적는다.',
   '- 이름표 "[클로드]"는 직접 붙이지 않는다. 앱이 붙인다.',
@@ -68,6 +71,22 @@ function systemFor(mode) {
   const extra = MODE_RULES[mode] || MODE_RULES.reply;
   return SYSTEM_PROMPT + '\n' + extra;
 }
+
+// 챗GPT(OpenAI)용 지침. 같은 방의 다른 AI와 겹치지 않는 각도를 맡는다.
+const SYSTEM_PROMPT_GPT = [
+  "너는 소망 님의 Slack 워크스페이스 '소망 AI 협업방'에서 '챗GPT'로 활동하는 AI 동료다.",
+  '같은 방에 피클(망이·개인 비서), 피클2, 뮤즈(정리·요약), 클로드가 있고, 각자 [이름] 이름표를 달고 스레드에 답한다.',
+  '',
+  '규칙:',
+  '- 항상 한국어로, 스레드에 바로 읽히도록 실제로 쓸 수 있게 쓴다.',
+  '- 인사, 자기소개, 서론, "물론입니다" 같은 말은 넣지 않는다. 첫 줄이 바로 답이다.',
+  '- 기본 3~6줄. 레포트·분석을 요구받았으면 12줄까지 써도 된다. 마크다운 제목(#)은 쓰지 않는다.',
+  '- 이 방은 Slack이다. 굵게는 *별표 한 개*, 목록은 "•". **나 ## 를 쓰면 화면에 그대로 보인다.',
+  '- 지금은 *답변 모드*다. 소망 님이 남긴 질문에 내 답을 먼저 낸다.',
+  '- "다른 AI 답변이 없어서 취합할 수 없다" 같은 말로 답을 대신하지 않는다. 취합은 따로 요청받으면 한다.',
+  '- 클로드가 산업·실행 쪽을 맡으니, 나는 아이디어·구조·반대각도·실행 스크립트 쪽에서 보텐다. 다른 AI 답을 반복하지 않는다.',
+  '- 이름표 "[챗GPT]"는 직접 붙이지 않는다. 앱이 붙인다.',
+].join('\n');
 
 export default {
   async fetch(request, env) {
@@ -99,6 +118,27 @@ export default {
       if (request.method !== 'POST') return reply({ ok: false, error: 'use_post' }, 405, cors);
       try {
         return await handleClaude(request, env, cors);
+      } catch (e) {
+        return reply({ ok: false, error: 'worker_exception', message: String((e && e.message) || e) }, 500, cors);
+      }
+    }
+
+    // ---------- 챗GPT 중계 ----------
+    if (method === 'openai' || method === 'gpt') {
+      if (request.method === 'GET') {
+        return reply({
+          ok: true,
+          endpoint: 'openai',
+          version: VERSION,
+          has_key: !!env.OPENAI_API_KEY,
+          model: env.OPENAI_MODEL || MODEL_GPT,
+          slack_token: !!env.SLACK_TOKEN,
+          channel: env.SLACK_CHANNEL || DEFAULT_CHANNEL,
+        }, 200, cors);
+      }
+      if (request.method !== 'POST') return reply({ ok: false, error: 'use_post' }, 405, cors);
+      try {
+        return await handleOpenAI(request, env, cors);
       } catch (e) {
         return reply({ ok: false, error: 'worker_exception', message: String((e && e.message) || e) }, 500, cors);
       }
@@ -188,7 +228,7 @@ async function handleClaude(request, env, cors) {
   }
 
   // 4) '[클로드] …' 로 스레드에 붙이기 (취합 답은 한눈에 구분되게)
-  const text = (mode === 'synthesize' ? '[클로드] 최종 취합\n' : '[클로드] ') + out.text.trim();
+  const text = (mode === 'synthesize' ? '[클로드] 최종 취합\n' : '[클로드] ') + slackify(out.text);
   const post = await slackPost(token, channel, text, threadTs);
   if (!post.ok) {
     return reply({
@@ -203,7 +243,7 @@ async function handleClaude(request, env, cors) {
   return reply({
     ok: true,
     ts: post.ts,
-    reply: out.text,
+    reply: slackify(out.text),
     model: out.model,
     mode,
     answers,
@@ -241,6 +281,164 @@ function bearer(request) {
   return m ? m[1].trim() : '';
 }
 
+/* ===================== 챗GPT(OpenAI) ===================== */
+
+async function handleOpenAI(request, env, cors) {
+  let body = {};
+  try { body = JSON.parse((await request.text()) || '{}') || {}; } catch (_) { /* 빈 값으로 진행 */ }
+
+  const apiKey = env.OPENAI_API_KEY || body.api_key || '';
+  if (!apiKey) {
+    return reply({
+      ok: false,
+      error: 'gpt_not_configured',
+      message: 'Worker에 OPENAI_API_KEY 가 아직 없어요. Cloudflare Worker → Settings → Variables and Secrets 에 Secret 으로 추가해 주세요.',
+    }, 200, cors);
+  }
+
+  const token = bearer(request) || (body.token ? String(body.token) : '') || env.SLACK_TOKEN || '';
+  if (!token) {
+    return reply({ ok: false, error: 'slack_token_missing', message: 'Slack 토큰이 없어요. Worker의 SLACK_TOKEN 또는 앱 설정의 토큰을 확인해 주세요.' }, 200, cors);
+  }
+
+  const channel = String(body.channel || env.SLACK_CHANNEL || DEFAULT_CHANNEL);
+  const threadTs = body.thread_ts ? String(body.thread_ts) : '';
+  const prompt = String(body.prompt || body.question || '').trim();
+
+  let messages = [];
+  let warn = null;
+  if (threadTs) {
+    const r = await slackCall(token, 'conversations.replies', { channel, ts: threadTs, limit: THREAD_LIMIT });
+    if (r.ok && Array.isArray(r.messages)) messages = r.messages;
+    else warn = r.error || 'replies_failed';
+  }
+
+  const names = await getUserNames(token);
+  const ask = buildGptPrompt(prompt, messages, names);
+  const answers = whoAnswered(messages);
+  const model = env.OPENAI_MODEL || body.model || MODEL_GPT;
+
+  const out = await callOpenAI(apiKey, ask, model);
+  if (!out.ok) {
+    return reply({
+      ok: false,
+      error: out.error,
+      message: out.message,
+      status: out.status || null,
+      thread_messages: messages.length,
+      warning: warn,
+    }, 200, cors);
+  }
+
+  const text = '[챗GPT] ' + slackify(out.text);
+  const post = await slackPost(token, channel, text, threadTs);
+  if (!post.ok) {
+    return reply({
+      ok: false,
+      error: 'slack_post_failed',
+      message: '챗GPT 답은 받았지만 Slack에 붙이지 못했어요 (' + post.error + ')',
+      reply: slackify(out.text),
+      thread_messages: messages.length,
+    }, 200, cors);
+  }
+
+  return reply({
+    ok: true,
+    ts: post.ts,
+    reply: slackify(out.text),
+    model: out.model,
+    mode: 'reply',
+    answers,
+    thread_messages: messages.length,
+    usage: out.usage || null,
+    warning: warn,
+  }, 200, cors);
+}
+
+function buildGptPrompt(prompt, messages, names) {
+  const lines = [];
+  for (const m of messages || []) {
+    const text = cleanSlackText(m.text);
+    if (!text) continue;
+    if (m.subtype && /channel_join|channel_leave/.test(m.subtype)) continue;
+    lines.push(speakerOf(m, names || {}) + ': ' + text);
+  }
+  let transcript = lines.join('\n');
+  if (transcript.length > THREAD_CHARS) transcript = '…(앞부분 생략)…\n' + transcript.slice(-THREAD_CHARS);
+
+  const parts = [];
+  if (transcript) parts.push('지금까지 스레드 대화:\n' + transcript);
+  if (prompt) parts.push('소망 님의 지시: ' + prompt);
+  parts.push([
+    '위 지시에 [챗GPT]로서 *내 답*을 바로 써줘.',
+    '질문에 "취합해", "종합해", "마지막에 정리해" 같은 말이 있어도, 지금은 내 답을 내는 단계다. 취합하지 말고 내 결론과 근거를 내라.',
+    '다른 AI 답이 아직 없다는 이유로 답을 비우지 말고, 질문에 답할 수 있는 만큼 끝까지 답해라.',
+    '레포트·분석을 요구받았으면 12줄 안에서 불릿으로 정리하고, 마지막에 다음 행동 1개를 붙여라. 아니면 3~6줄.',
+  ].join('\n'));
+  return parts.join('\n\n');
+}
+
+async function callOpenAI(apiKey, prompt, model) {
+  let res;
+  try {
+    res = await fetch(OPENAI_API, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: MAX_TOKENS,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT_GPT },
+          { role: 'user', content: prompt },
+        ],
+      }),
+    });
+  } catch (e) {
+    return { ok: false, error: 'openai_unreachable', message: 'OpenAI에 닿지 못했어요. (' + String((e && e.message) || e) + ')' };
+  }
+
+  let data = null;
+  try { data = await res.json(); } catch (_) { data = null; }
+
+  if (res.ok && data && Array.isArray(data.choices) && data.choices.length) {
+    const c = data.choices[0] || {};
+    const text = String((c.message && c.message.content) || '').trim();
+    if (!text) return { ok: false, error: 'empty_reply', message: '챗GPT가 빈 답을 보냈어요. 잠시 뒤 다시 시도해 주세요.' };
+    return { ok: true, text, model: data.model || model, usage: data.usage || null };
+  }
+
+  return mapOpenAIError(res.status, data);
+}
+
+function mapOpenAIError(status, data) {
+  const err = (data && data.error) || {};
+  const code = String(err.code || err.type || '');
+  const msg = String(err.message || '');
+
+  if (status === 401 || code === 'invalid_api_key') {
+    return { ok: false, error: 'gpt_invalid_api_key', status, message: 'OpenAI API 키가 올바르지 않아요. Worker의 OPENAI_API_KEY 값을 확인해 주세요.' };
+  }
+  if (code === 'insufficient_quota' || /exceeded your current quota|billing/i.test(msg)) {
+    return {
+      ok: false, error: 'gpt_insufficient_quota', status,
+      message: 'OpenAI 크레딧·결제가 아직이에요. platform.openai.com/settings/organization/billing 에서 충전하면 챗GPT가 바로 답해요.',
+    };
+  }
+  if (status === 429 || code === 'rate_limit_exceeded') {
+    return { ok: false, error: 'rate_limited', status, message: '챗GPT 요청이 잠깐 몰렸어요. 10초 뒤에 다시 시도해 주세요.' };
+  }
+  if (status === 404 || code === 'model_not_found') {
+    return { ok: false, error: 'model_not_found', status, message: '모델 "' + (data && data.model) + '" 을(를) 찾지 못했어요. (' + (msg || 'HTTP 404') + ')' };
+  }
+  if (status === 400 || code === 'invalid_request_error') {
+    return { ok: false, error: 'invalid_request', status, message: '챗GPT 요청 형식이 맞지 않아요. (' + (msg || 'HTTP 400') + ')' };
+  }
+  return { ok: false, error: 'gpt_failed', status, message: msg || ('챗GPT 오류 (HTTP ' + status + ')') };
+}
+
 async function slackCall(token, method, params) {
   const form = new URLSearchParams();
   for (const k of Object.keys(params || {})) {
@@ -276,6 +474,16 @@ async function slackPost(token, channel, text, threadTs) {
     if (chunks.length > 1) await sleep(350);
   }
   return { ok: true, ts: firstTs };
+}
+
+// Slack에 그대로 보이는 형식으로 다듬는다. (마크다운 별표 두 개·제목 기호가 화면에 남지 않게)
+function slackify(t) {
+  return String(t || '')
+    .replace(/^\s{0,3}#{1,6}\s*/gm, '')
+    .replace(/\*\*(.+?)\*\*/g, '*$1*')
+    .replace(/__(.+?)__/g, '*$1*')
+    .replace(/^\s*[-•]\s+/gm, '• ')
+    .trim();
 }
 
 function splitText(text, limit) {

@@ -434,7 +434,7 @@
           <input id="in-proxy" type="url" placeholder="https://somang-ai-hub.내이름.workers.dev" autocomplete="off" spellcheck="false" autocapitalize="off">
         </label>
         <p class="hint">휴대폰 브라우저에서 slack.com을 직접 부르면 CORS에 막혀요. Worker 프록시를 거치면 폰에서도 안전하게 동작해요.</p>
-        <p class="hint"><b>클로드 즉답</b> — 질문을 남기면 클로드가 <b>자기 답을 먼저</b> 스레드에 붙여요(보통 2~10초). Worker에 <code>ANTHROPIC_API_KEY</code> Secret 과 Anthropic 크레딧이 있어야 해요. 카드의 <b>🤖 클로드 취합</b> 버튼을 누를 때만 스레드의 여러 AI 답을 비교해 <b>[클로드] 최종 취합</b>을 붙여요.</p>
+        <p class="hint"><b>클로드·챗GPT 즉답</b> — 질문을 남기면 클로드와 챗GPT가 <b>각자 자기 답을 먼저</b> 스레드에 붙여요(보통 2~10초). Worker에 <code>ANTHROPIC_API_KEY</code>·<code>OPENAI_API_KEY</code> Secret 과 각 크레딧이 있어야 해요. 카드의 <b>🤖 클로드 취합</b> 버튼을 누를 때만 스레드의 여러 AI 답을 비교해 <b>[클로드] 최종 취합</b>을 붙여요.</p>
 
         <div class="switch-row">
           <div><b>Worker에 토큰 보관</b><small>프록시가 토큰을 갖고 있으면 폰에는 토큰을 저장하지 않아도 돼요.</small></div>
@@ -483,7 +483,7 @@
     { key:'claude', name:'클로드', av:'클', prefix:'@Claude', bg:'#ffe4cf', fg:'#a34a00',
       role:'Claude · 바로 답하는 AI', mention:'@Claude', how:'질문에 내 답을 먼저 달아요(보통 2~10초). 다른 AI 답까지 합친 최종 정리는 카드의 🤖 클로드 취합 버튼으로 해요.' },
     { key:'chatgpt', name:'챗GPT', av:'G', prefix:'@챗GPT', bg:'#ece3ff', fg:'#5b21b6',
-      role:'ChatGPT · 아이디어와 초안', mention:'@챗GPT', how:'스레드에 [챗GPT]로 답해요. 다른 각도의 의견을 들을 때 좋아요.' }
+      role:'ChatGPT · 아이디어와 초안', mention:'@챗GPT', how:'질문에 내 답을 먼저 달아요(보통 2~10초). Worker가 OpenAI API로 답해요.' }
   ];
   var REPLY_AIS = AIS.filter(function (a) { return a.key !== 'all'; });
 
@@ -735,6 +735,62 @@
       });
     }).then(function (data) {
       if (!data || data.ok !== true) throw claudeFail(data);
+      return data;
+    });
+  }
+
+  /* ===================== 챗GPT (OpenAI 중계기) ===================== */
+  var GPT_ERRORS = {
+    gpt_not_configured: 'Worker에 OPENAI_API_KEY 가 아직 없어요. Cloudflare Worker 설정에서 Secret 으로 추가해 주세요.',
+    gpt_invalid_api_key: 'OpenAI API 키가 올바르지 않아요. Worker의 OPENAI_API_KEY 값을 확인해 주세요.',
+    gpt_insufficient_quota: 'OpenAI 크레딧·결제가 아직이에요. platform.openai.com 결제에서 충전하면 챗GPT가 바로 답해요.',
+    rate_limited: '챗GPT 요청이 잠깐 몰렸어요. 10초 뒤에 다시 시도해 주세요.',
+    slack_token_missing: 'Slack 토큰이 없어 Worker가 스레드를 읽지 못해요. 설정에서 토큰을 확인해 주세요.',
+    slack_post_failed: '챗GPT 답은 받았지만 Slack 스레드에 붙이지 못했어요.',
+    empty_reply: '챗GPT가 빈 답을 보냈어요. 잠시 뒤 다시 시도해 주세요.',
+    gpt_failed: '챗GPT가 답하지 못했어요. 잠시 뒤 다시 시도해 주세요.'
+  };
+
+  function gptUrl() {
+    var p = (state.proxy || '').trim().replace(/\/+$/, '');
+    if (/\/api$/.test(p)) p = p.slice(0, -4);
+    return p ? p + '/openai' : '';
+  }
+
+  function gptFail(data) {
+    var code = (data && data.error) || 'gpt_failed';
+    var e = new Error(GPT_ERRORS[code] || (data && data.message) || '챗GPT 호출에 실패했어요');
+    e.code = code;
+    e.detail = data;
+    return e;
+  }
+
+  function gptInfo() {
+    var url = gptUrl();
+    if (!url) return Promise.resolve(null);
+    return fetch(url, { method: 'GET' })
+      .then(function (r) { return r.json(); })
+      .catch(function () { return null; });
+  }
+
+  // Worker의 /openai: 스레드 맥락을 읽고 → OpenAI 호출 → [챗GPT] 답장을 스레드에 붙인다.
+  function gpt(payload) {
+    var url = gptUrl();
+    if (!url) return Promise.reject(new Error('프록시 URL이 없어 챗GPT를 부를 수 없어요. 설정을 확인해 주세요.'));
+    var headers = { 'Content-Type': 'application/json; charset=utf-8' };
+    if (state.token) headers.Authorization = 'Bearer ' + state.token;
+    return fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(payload)
+    }).catch(function () {
+      throw new Error('Worker에 닿지 못했어요. 프록시 URL과 인터넷 연결을 확인해 주세요.');
+    }).then(function (res) {
+      return res.json().catch(function () {
+        throw new Error('챗GPT 응답을 읽지 못했어요. (HTTP ' + res.status + ')');
+      });
+    }).then(function (data) {
+      if (!data || data.ok !== true) throw gptFail(data);
       return data;
     });
   }
@@ -1005,12 +1061,19 @@
     var waiting;
     if (p.replies.length) {
       waiting = '<div class="replies">' + p.replies.map(replyHTML).join('') + '</div>';
-    } else if (p.claude === 'waiting') {
-      waiting = '<div class="waiting">클로드가 내 답을 쓰는 중 <span class="dots"><i></i><i></i><i></i></span></div>';
-    } else if (p.claude === 'error') {
-      waiting = '<div class="waiting err">🤖 ' + esc(p.claudeError || '클로드가 답하지 못했어요') + '</div>';
     } else {
-      waiting = '<div class="waiting">답장을 기다리는 중 <span class="dots"><i></i><i></i><i></i></span></div>';
+      var waits = [], errs = [];
+      if (p.claude === 'waiting') waits.push('클로드');
+      if (p.gpt === 'waiting') waits.push('챗GPT');
+      if (p.claude === 'error') errs.push(p.claudeError || '클로드가 답하지 못했어요');
+      if (p.gpt === 'error') errs.push(p.gptError || '챗GPT가 답하지 못했어요');
+      if (waits.length) {
+        waiting = '<div class="waiting">' + esc(waits.join('·')) + '가 내 답을 쓰는 중 <span class="dots"><i></i><i></i><i></i></span></div>';
+      } else if (errs.length) {
+        waiting = errs.map(function (m) { return '<div class="waiting err">🤖 ' + esc(m) + '</div>'; }).join('');
+      } else {
+        waiting = '<div class="waiting">답장을 기다리는 중 <span class="dots"><i></i><i></i><i></i></span></div>';
+      }
     }
     return '<article class="card" data-ts="' + esc(p.ts) + '">' +
       '<div class="card-top">' + avaHTML(null) +
@@ -1159,9 +1222,9 @@
 
   function composeText(ai, text) {
     var raw = String(text || '');
-    // 클로드에게 보내는 지시는 Worker가 답을 스레드에 붙이므로 멘션·이름표 없이 그대로 올린다.
-    // (Slack의 Claude 앱이 같이 답해 두 줄이 되는 일을 막는다.)
-    if (ai && ai.key === 'claude') return raw;
+    // 클로드·챗GPT에게 보내는 지시는 Worker가 답을 스레드에 붙이므로 멘션·이름표 없이 그대로 올린다.
+    // (Slack의 Claude/ChatGPT 앱이 같이 답해 두 줄이 되는 일을 막는다.)
+    if (ai && (ai.key === 'claude' || ai.key === 'chatgpt')) return raw;
     var already = /(^|\s)@(피클2|피클|뮤즈|클로드|Claude|챗GPT|ChatGPT)(?![\w])/i.test(raw);
     var out = mentionize(raw);
     if (!ai || ai.key === 'all') return out;
@@ -1204,12 +1267,14 @@
           simulateReply(pending, ai);
         } else if (ai.key === 'claude') {
           askClaude(pending, text);
+        } else if (ai.key === 'chatgpt') {
+          askGpt(pending, text);
         } else {
-          // '모두에게' 로 남긴 질문도 클로드가 자기 답을 먼저 단다. 답이 올 때까지 기다렸다가 새로 그린다.
-          if (ai.key === 'all') askClaude(pending, text);
+          // '모두에게' 로 남긴 질문도 클로드·챗GPT가 각자 자기 답을 먼저 단다. 답이 올 때까지 기다렸다가 새로 그린다.
+          if (ai.key === 'all') { askClaude(pending, text); askGpt(pending, text); }
           else setTimeout(function () { refresh(false); }, 900);
         }
-        toast(ai.key === 'all' ? '방에 남겼어요. 클로드가 먼저 답하고, 다른 AI들도 이어서 답해요' : ai.name + '에게 남겼어요');
+        toast(ai.key === 'all' ? '방에 남겼어요. 클로드·챗GPT가 먼저 답하고, 다른 AI들도 이어서 답해요' : ai.name + '에게 남겼어요');
       })
       .catch(function (e) {
         toast(e.message || '보내지 못했어요', 4200);
@@ -1230,7 +1295,6 @@
       prompt: text,
       mode: 'reply'
     }).then(function (d) {
-      cache.pending = cache.pending.filter(function (p) { return p !== pending; });
       toast('클로드가 답했어요 · ' + (d.model || 'claude'), 2200);
       refresh(false);
     }).catch(function (e) {
@@ -1238,6 +1302,25 @@
       pending.claudeError = e.message || '클로드가 답하지 못했어요';
       renderPendingOnly();
       toast(pending.claudeError, 5600);
+    });
+  }
+
+  // 챗GPT에게 남긴 지시: Worker(/openai)가 [챗GPT] 답장을 붙인다.
+  function askGpt(pending, text) {
+    pending.gpt = 'waiting';
+    renderPendingOnly();
+    gpt({
+      channel: state.channel || DEFAULT_CHANNEL,
+      thread_ts: pending.ts,
+      prompt: text
+    }).then(function (d) {
+      toast('챗GPT가 답했어요 · ' + (d.model || 'gpt'), 2200);
+      refresh(false);
+    }).catch(function (e) {
+      pending.gpt = 'error';
+      pending.gptError = e.message || '챗GPT가 답하지 못했어요';
+      renderPendingOnly();
+      toast(pending.gptError, 5600);
     });
   }
 
@@ -1303,9 +1386,16 @@
       c.textContent = base + (mode() === 'demo' ? ' (지금은 미리보기 모드예요)' : '');
       claudeInfo().then(function (ci) {
         if (!ci) return;
-        c.textContent = base + (ci.has_key === true
+        var line = base + (ci.has_key === true
           ? ' · 클로드 준비됨 (' + (ci.model || 'claude') + ')'
           : ' · 클로드 키 없음 (Worker에 ANTHROPIC_API_KEY 필요)');
+        c.textContent = line;
+        return gptInfo().then(function (gi) {
+          if (!gi) return;
+          c.textContent = line + (gi.has_key === true
+            ? ' · 챗GPT 준비됨 (' + (gi.model || 'gpt') + ')'
+            : ' · 챗GPT 키 없음 (Worker에 OPENAI_API_KEY 필요)');
+        });
       });
     }).catch(function (e) {
       c.className = 'conn err';
