@@ -239,7 +239,15 @@
   .waiting .dots i{width:4px; height:4px; border-radius:50%; background:#c6ced4; animation:blink 1.2s infinite}
   .waiting .dots i:nth-child(2){animation-delay:.2s}
   .waiting .dots i:nth-child(3){animation-delay:.4s}
+  .waiting.err{color:#b4232c}
   @keyframes blink{0%,60%,100%{opacity:.35} 30%{opacity:1}}
+  .synth{
+    margin-top:12px; display:inline-flex; align-items:center; gap:6px;
+    font-size:12.5px; font-weight:800; letter-spacing:-.02em;
+    padding:8px 12px; border-radius:12px; background:#fff4ea; color:#a34a00;
+    border:1px solid #ffd9b8;
+  }
+  .synth:disabled{opacity:.55}
 
   .skeleton{height:88px; border-radius:20px; background:linear-gradient(100deg,#e9edec 20%,#f2f5f4 40%,#e9edec 60%); background-size:200% 100%; animation:sh 1.2s infinite linear}
   @keyframes sh{to{background-position:-200% 0}}
@@ -426,6 +434,7 @@
           <input id="in-proxy" type="url" placeholder="https://somang-ai-hub.내이름.workers.dev" autocomplete="off" spellcheck="false" autocapitalize="off">
         </label>
         <p class="hint">휴대폰 브라우저에서 slack.com을 직접 부르면 CORS에 막혀요. Worker 프록시를 거치면 폰에서도 안전하게 동작해요.</p>
+        <p class="hint"><b>클로드 즉답</b> — 클로드에게 지시하면 Worker가 Anthropic API로 답해 1~2초 안에 스레드에 붙여요. Worker에 <code>ANTHROPIC_API_KEY</code> Secret 과 Anthropic 크레딧이 있어야 해요. 각 스레드의 <b>🤖 클로드 취합</b> 버튼은 그 스레드의 답들을 한 번에 정리해요.</p>
 
         <div class="switch-row">
           <div><b>Worker에 토큰 보관</b><small>프록시가 토큰을 갖고 있으면 폰에는 토큰을 저장하지 않아도 돼요.</small></div>
@@ -472,7 +481,7 @@
     { key:'muse', name:'뮤즈', av:'뮤', prefix:'@뮤즈', bg:'#dce9ff', fg:'#1d4ed8',
       role:'Meta Muse · 정리와 요약', mention:'@뮤즈', how:'스레드에 [뮤즈]로 답해요. 긴 대화를 정리할 때 든든해요.' },
     { key:'claude', name:'클로드', av:'클', prefix:'@Claude', bg:'#ffe4cf', fg:'#a34a00',
-      role:'Claude · 바로 답하는 AI', mention:'@Claude', how:'부르면 즉시 스레드에 답해요. 초안·비교·정리가 빠른 편이에요.' },
+      role:'Claude · 바로 답하는 AI', mention:'@Claude', how:'Worker가 Anthropic API로 답해 1~2초 안에 [클로드]로 스레드에 붙여요. 다른 AI 답들은 🤖 클로드 취합으로 정리해요.' },
     { key:'chatgpt', name:'챗GPT', av:'G', prefix:'@챗GPT', bg:'#ece3ff', fg:'#5b21b6',
       role:'ChatGPT · 아이디어와 초안', mention:'@챗GPT', how:'스레드에 [챗GPT]로 답해요. 다른 각도의 의견을 들을 때 좋아요.' }
   ];
@@ -668,6 +677,64 @@
         e.detail = data;
         throw e;
       }
+      return data;
+    });
+  }
+
+  /* ===================== 클로드 (Anthropic 중계기) ===================== */
+  var CLAUDE_ERRORS = {
+    claude_not_configured: 'Worker에 ANTHROPIC_API_KEY 가 아직 없어요. Cloudflare Worker 설정에서 Secret 으로 추가해 주세요.',
+    invalid_api_key: 'Anthropic API 키가 올바르지 않아요. Worker의 ANTHROPIC_API_KEY 값을 확인해 주세요.',
+    insufficient_credit: 'Anthropic 크레딧이 아직 0이에요. platform.claude.com/settings/billing 에서 $5 충전하면 클로드가 바로 답해요.',
+    permission_denied: '이 API 키로는 클로드를 부를 수 없어요. Anthropic 콘솔에서 키 권한을 확인해 주세요.',
+    rate_limited: '클로드 요청이 잠깐 몰렸어요. 10초 뒤에 다시 시도해 주세요.',
+    overloaded: '클로드 서버가 잠시 붐비네요. 조금 뒤에 다시 시도해 주세요.',
+    slack_token_missing: 'Slack 토큰이 없어 Worker가 스레드를 읽지 못해요. 설정에서 토큰을 확인해 주세요.',
+    slack_post_failed: '클로드 답은 받았지만 Slack 스레드에 붙이지 못했어요.',
+    empty_reply: '클로드가 빈 답을 보냈어요. 잠시 뒤 다시 시도해 주세요.',
+    claude_failed: '클로드가 답하지 못했어요. 잠시 뒤 다시 시도해 주세요.'
+  };
+
+  function claudeUrl() {
+    var p = (state.proxy || '').trim().replace(/\/+$/, '');
+    if (/\/api$/.test(p)) p = p.slice(0, -4);
+    return p ? p + '/claude' : '';
+  }
+
+  function claudeFail(data) {
+    var code = (data && data.error) || 'claude_failed';
+    var e = new Error(CLAUDE_ERRORS[code] || (data && data.message) || '클로드 호출에 실패했어요');
+    e.code = code;
+    e.detail = data;
+    return e;
+  }
+
+  function claudeInfo() {
+    var url = claudeUrl();
+    if (!url) return Promise.resolve(null);
+    return fetch(url, { method: 'GET' })
+      .then(function (r) { return r.json(); })
+      .catch(function () { return null; });
+  }
+
+  // Worker의 /claude: 스레드 맥락을 읽고 → Anthropic 호출 → [클로드] 답장을 스레드에 붙인다.
+  function claude(payload) {
+    var url = claudeUrl();
+    if (!url) return Promise.reject(new Error('프록시 URL이 없어 클로드를 부를 수 없어요. 설정을 확인해 주세요.'));
+    var headers = { 'Content-Type': 'application/json; charset=utf-8' };
+    if (state.token) headers.Authorization = 'Bearer ' + state.token;
+    return fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(payload)
+    }).catch(function () {
+      throw new Error('Worker에 닿지 못했어요. 프록시 URL과 인터넷 연결을 확인해 주세요.');
+    }).then(function (res) {
+      return res.json().catch(function () {
+        throw new Error('클로드 응답을 읽지 못했어요. (HTTP ' + res.status + ')');
+      });
+    }).then(function (data) {
+      if (!data || data.ok !== true) throw claudeFail(data);
       return data;
     });
   }
@@ -917,6 +984,9 @@
     var replies = t.replies.length
       ? '<div class="replies">' + t.replies.map(replyHTML).join('') + '</div>'
       : '';
+    var synth = mode() === 'live'
+      ? '<button class="synth" type="button" data-synth="' + esc(t.ts) + '">🤖 클로드 취합</button>'
+      : '';
     return '<article class="card" data-ts="' + esc(t.ts) + '">' +
       '<div class="card-top">' +
         avaHTML(t.aiKey) +
@@ -926,15 +996,22 @@
         '</div>' + link +
       '</div>' +
       '<div class="msg">' + formatSlack(t.body) + '</div>' +
-      replies +
+      replies + synth +
     '</article>';
   }
 
   function pendingHTML(p) {
     var ai = aiByKey(p.aiKey || 'all');
-    var waiting = p.replies.length
-      ? '<div class="replies">' + p.replies.map(replyHTML).join('') + '</div>'
-      : '<div class="waiting">답장을 기다리는 중 <span class="dots"><i></i><i></i><i></i></span></div>';
+    var waiting;
+    if (p.replies.length) {
+      waiting = '<div class="replies">' + p.replies.map(replyHTML).join('') + '</div>';
+    } else if (p.claude === 'waiting') {
+      waiting = '<div class="waiting">클로드가 스레드를 읽고 답하는 중 <span class="dots"><i></i><i></i><i></i></span></div>';
+    } else if (p.claude === 'error') {
+      waiting = '<div class="waiting err">🤖 ' + esc(p.claudeError || '클로드가 답하지 못했어요') + '</div>';
+    } else {
+      waiting = '<div class="waiting">답장을 기다리는 중 <span class="dots"><i></i><i></i><i></i></span></div>';
+    }
     return '<article class="card" data-ts="' + esc(p.ts) + '">' +
       '<div class="card-top">' + avaHTML(null) +
         '<div class="who"><div class="who-line"><span class="name">소망</span><span class="tag mine">지시</span></div>' +
@@ -1082,13 +1159,14 @@
 
   function composeText(ai, text) {
     var raw = String(text || '');
+    // 클로드에게 보내는 지시는 Worker가 답을 스레드에 붙이므로 멘션·이름표 없이 그대로 올린다.
+    // (Slack의 Claude 앱이 같이 답해 두 줄이 되는 일을 막는다.)
+    if (ai && ai.key === 'claude') return raw;
     var already = /(^|\s)@(피클2|피클|뮤즈|클로드|Claude|챗GPT|ChatGPT)(?![\w])/i.test(raw);
     var out = mentionize(raw);
     if (!ai || ai.key === 'all') return out;
     if (already) return out;
-    var prefix = ai.prefix;
-    if (ai.key === 'claude') prefix = claudeId() ? '<@' + claudeId() + '>' : '@Claude';
-    return prefix + ' ' + out;
+    return ai.prefix + ' ' + out;
   }
 
   function grow() {
@@ -1124,6 +1202,8 @@
         if (cache.loaded) renderPendingOnly(); else renderTimeline();
         if (mode() === 'demo') {
           simulateReply(pending, ai);
+        } else if (ai.key === 'claude') {
+          askClaude(pending, text);
         } else {
           setTimeout(function () { refresh(false); }, 900);
         }
@@ -1136,6 +1216,47 @@
         btn.disabled = false;
         btn.textContent = '지시 남기기';
       });
+  }
+
+  // 클로드에게 남긴 지시: Worker가 스레드를 읽고 1~2초 안에 [클로드] 답장을 붙인다.
+  function askClaude(pending, text) {
+    pending.claude = 'waiting';
+    renderPendingOnly();
+    claude({
+      channel: state.channel || DEFAULT_CHANNEL,
+      thread_ts: pending.ts,
+      prompt: text,
+      mode: 'reply'
+    }).then(function (d) {
+      cache.pending = cache.pending.filter(function (p) { return p !== pending; });
+      toast('클로드가 답했어요 · ' + (d.model || 'claude'), 2200);
+      refresh(false);
+    }).catch(function (e) {
+      pending.claude = 'error';
+      pending.claudeError = e.message || '클로드가 답하지 못했어요';
+      renderPendingOnly();
+      toast(pending.claudeError, 5600);
+    });
+  }
+
+  // 스레드의 [피클]·[뮤즈] 답들을 클로드가 한 번에 취합해 [클로드]로 붙인다.
+  function synthesize(ts, btn) {
+    if (btn && btn.disabled) return;
+    var label = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '취합하는 중…'; }
+    toast('클로드가 스레드를 취합하는 중…', 1600);
+    claude({
+      channel: state.channel || DEFAULT_CHANNEL,
+      thread_ts: ts,
+      mode: 'synthesize'
+    }).then(function () {
+      toast('클로드가 취합해 스레드에 붙였어요', 2400);
+      return refresh(false);
+    }).catch(function (e) {
+      toast(e.message || '취합하지 못했어요', 5600);
+    }).then(function () {
+      if (btn) { btn.disabled = false; btn.textContent = label || '🤖 클로드 취합'; }
+    });
   }
 
   function simulateReply(pending, ai) {
@@ -1174,9 +1295,15 @@
       return slack('conversations.info', { channel: state.channel || DEFAULT_CHANNEL });
     }).then(function (info) {
       c.className = 'conn ok';
-      c.textContent = '연결됐어요! ' + (auth.team || '워크스페이스') + ' · #' +
-        ((info.channel && info.channel.name) || (state.channel || DEFAULT_CHANNEL)) +
-        (mode() === 'demo' ? ' (지금은 미리보기 모드예요)' : '');
+      var base = '연결됐어요! ' + (auth.team || '워크스페이스') + ' · #' +
+        ((info.channel && info.channel.name) || (state.channel || DEFAULT_CHANNEL));
+      c.textContent = base + (mode() === 'demo' ? ' (지금은 미리보기 모드예요)' : '');
+      claudeInfo().then(function (ci) {
+        if (!ci) return;
+        c.textContent = base + (ci.has_key === true
+          ? ' · 클로드 준비됨 (' + (ci.model || 'claude') + ')'
+          : ' · 클로드 키 없음 (Worker에 ANTHROPIC_API_KEY 필요)');
+      });
     }).catch(function (e) {
       c.className = 'conn err';
       c.textContent = e.message || '연결하지 못했어요.';
@@ -1242,6 +1369,10 @@
     });
     $('send').addEventListener('click', send);
     $('refresh').addEventListener('click', function () { refresh(true); });
+    $('timeline').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-synth]');
+      if (b) synthesize(b.getAttribute('data-synth'), b);
+    });
 
     $('poll').addEventListener('change', function () {
       state.poll = this.checked;

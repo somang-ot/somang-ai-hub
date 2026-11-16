@@ -14,8 +14,43 @@ Slack 채널 **#소망-ai-협업방-전체** 를 저장소로 쓰는, 폰에서 
 | 파일 | 하는 일 |
 | --- | --- |
 | `index.html` | 앱 전체 (HTML/CSS/JS 한 파일, 빌드 없음) |
-| `cloudflare-worker.js` | 브라우저 ↔ Slack 사이 CORS 프록시 (Cloudflare Worker) |
+| `cloudflare-worker.js` | 브라우저 ↔ Slack 사이 CORS 프록시 + **클로드(Anthropic) 중계기** (Cloudflare Worker) |
 | `README.md` | 이 문서 |
+
+## 클로드 바로 답하기 (Anthropic API)
+
+`클로드`에게 지시하면 **1~2초 안에** 스레드에 `[클로드] …` 답장이 붙습니다.
+Slack의 Claude 앱을 기다리지 않고, Worker가 Anthropic API를 직접 부릅니다.
+
+1. Worker `somang-slack-proxy` → **Settings → Variables and Secrets** 에 Secret `ANTHROPIC_API_KEY` 추가
+   (이미 추가되어 있어요. 키를 바꿀 때만 다시 넣으면 됩니다.)
+2. Anthropic 콘솔 **Billing** 에서 크레딧 충전 (`platform.claude.com/settings/billing`).
+   크레딧이 0이면 앱에 “Anthropic 크레딧이 아직 0이에요 …” 안내가 뜨고, 충전 후 바로 동작합니다.
+
+동작 방식:
+
+- 앱이 지시를 Slack에 올린 뒤 `POST {프록시}/claude` 를 부릅니다.
+  - `{ channel, thread_ts, prompt, mode: 'reply' }`
+- Worker가 `conversations.replies` 로 스레드 맥락(최대 60개)을 읽고 → Anthropic `claude-sonnet-4-6` (기본) 에 묻고 → `[클로드] …` 로 스레드에 붙입니다.
+- 모델은 Worker 변수 `ANTHROPIC_MODEL` 로 바꿀 수 있어요. (`claude-sonnet-5`, `claude-haiku-4-5-20251001` 로 자동 대체)
+- 클로드에게 보내는 지시는 **@Claude 멘션 없이** 올립니다. Slack의 Claude 앱과 답이 겹치지 않게 하려는 것이고, 답은 Worker가 붙입니다.
+
+### 🤖 클로드 취합
+
+각 스레드 카드 아래 **🤖 클로드 취합** 버튼을 누르면 그 스레드의 `[피클]`·`[뮤즈`·`[챗GPT]` 답들을 클로드가 한 번에 정리해 `[클로드]` 로 붙입니다.
+(`POST {프록시}/claude` · `{ channel, thread_ts, mode: 'synthesize' }`)
+
+### Worker API
+
+| 요청 | 하는 일 |
+| --- | --- |
+| `GET /claude` | 준비 상태 (`has_key`, `model`, `slack_token`, `channel`) |
+| `POST /claude` `{ channel, thread_ts, prompt, mode }` | `mode: 'reply'` 지시에 답 / `mode: 'synthesize'` 스레드 취합 |
+| `POST /auth.test` 등 | 기존 Slack 프록시 (그대로) |
+
+응답은 `{ ok: true, ts, reply, model }` 또는 `{ ok: false, error, message }` 입니다.
+`error` 예: `insufficient_credit`, `invalid_api_key`, `claude_not_configured`, `slack_post_failed`, `rate_limited`.
+
 
 ## 먼저 그냥 열어 보기
 
@@ -98,6 +133,7 @@ Slack 채널 **#소망-ai-협업방-전체** 를 저장소로 쓰는, 폰에서 
 | `not_in_channel` | 채널에서 `/invite @앱이름` |
 | `channel_not_found` | 채널 ID 확인 (`C0CHQCP2KPD`) |
 | 답장이 안 보임 | 자동 새로고침을 켜거나 ↻. 뮤즈는 최대 10분 걸릴 수 있음 |
+| 클로드 답이 안 옴 | 설정 → 연결 테스트 에 `클로드 준비됨` 이 나오는지 확인. `클로드 키 없음` 이면 Worker에 `ANTHROPIC_API_KEY` Secret 추가, `Anthropic 크레딧이 0` 이면 Billing 에서 충전 |
 
 ## 보안
 
